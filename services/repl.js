@@ -1,6 +1,6 @@
 const { ServiceBroker } = require("moleculer");
-const { loadConfig } = require("./config");
-const { nodeid } = require("./utils");
+const { loadConfig } = require("../config/dev/config");
+const { nodeid } = require("../utils/utils");
 
 // create broker
 const config = {

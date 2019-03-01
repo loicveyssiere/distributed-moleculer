@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'z-worker',
-      script: './worker.js',
-      args: '-c ./config2.js',
+      script: './services/worker.js',
+      args: '-c ../../config/dev/config2.js',
       instances: 2,
       autorestart: true,
       watch: "worker.js",
@@ -13,8 +13,8 @@ module.exports = {
     },
     {
       name: 'z-controller',
-      script: './controller.js',
-      args: '-c ./config2.js',
+      script: './services/controller.js',
+      args: '-c ../../config/dev/config2.js',
       autorestart: true,
       watch: "controller.js",
       max_memory_restart: '1G',
@@ -23,8 +23,8 @@ module.exports = {
     },
     {
       name: 'z-localstore',
-      script: './localstore.js',
-      args: '-c ./config2.js',
+      script: './services/localstore.js',
+      args: '-c ../../config/dev/config2.js',
       autorestart: true,
       watch: "localstore.js",
       max_memory_restart: '1G',
@@ -33,8 +33,8 @@ module.exports = {
     },
     {
       name: 'z-remotestore',
-      script: './remotestore.js',
-      args: '-c ./config2.js',
+      script: './services/remotestore.js',
+      args: '-c ../../config/dev/config2.js',
       autorestart: true,
       watch: "remotestore.js",
       max_memory_restart: '1G',
@@ -43,11 +43,16 @@ module.exports = {
     },
     {
       name: "z-nats-local",
-      script: "./gnatsd",
+      script: "/usr/local/bin/gnatsd",
       args: "-p 6222 -cluster nats://localhost:6248 -m 10222",
       autorestart: true,
       watch: false,
       max_memory_restart: '1G',
+    },
+    {
+      name: "z-minio",
+      script: "./scripts/start-minio.sh",
+      autorestart: true
     },
     {
       name: "z-nats-local-board",

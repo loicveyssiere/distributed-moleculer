@@ -1,7 +1,7 @@
 const { ServiceBroker } = require("moleculer");
-const { loadConfig } = require("./config");
-const { death, nodeid, exit, uuid, pipeline, to, logger, shortname, sleep } = require("./utils");
-const s3 = require("./s3");
+const { loadConfig } = require("../config/dev/config");
+const { death, nodeid, exit, uuid, pipeline, to, logger, shortname, sleep } = require("../utils/utils");
+const s3 = require("../utils/s3");
 const fs = require("fs");
 
 // variables

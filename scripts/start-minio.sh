@@ -1,5 +1,7 @@
 #/bin/sh
-cd "$(dirname "$0")"
+
+PATH_PROJECT="$(dirname "$0")"/../
+cd $PATH_PROJECT
 
 # dev conf
 MINIO_ACCESS_KEY=test
@@ -12,4 +14,4 @@ MINIO_SERVERS=( /tmp/ocr-ms/moleculer )
 # run
 export MINIO_ACCESS_KEY
 export MINIO_SECRET_KEY
-./minio server ${MINIO_SERVERS[@]}
+minio server ${MINIO_SERVERS[@]}

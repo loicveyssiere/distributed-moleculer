@@ -1,8 +1,8 @@
 const util = require("util");
 const { ServiceBroker } = require("moleculer");
-const { loadConfig } = require("./config");
-const { death, nodeid, exit, uuid, to, logger } = require("./utils");
-const s3 = require("./s3");
+const { loadConfig } = require("../config/dev/config");
+const { death, nodeid, exit, uuid, to, logger } = require("../utils/utils");
+const s3 = require("../utils/s3");
 
 // variables
 const states = {};

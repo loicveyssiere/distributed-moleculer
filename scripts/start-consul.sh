@@ -1,8 +1,10 @@
 #/bin/sh
-cd "$(dirname "$0")"
+
+PATH_PROJECT="$(dirname "$0")"/../
+cd $PATH_PROJECT
 
 # dev conf
-CONSUL_IP=$( gethostip -d ${HOSTNAME%%.*} )
+CONSUL_IP=$(internal-ip --ipv4)
 CONSUL_MASTERS=( $CONSUL_IP )
 
 # override for production
@@ -22,7 +24,7 @@ done
 pkill consul
 set -x
 if [ -n "$ISMASTER" ]; then
-  ./consul agent -bind $CONSUL_IP -config-file ./consul.json $RETRY -server -bootstrap-expect $QUORUM "$@"
+  consul agent -bind $CONSUL_IP -config-file ./config/consul/consul.json $RETRY -server -bootstrap-expect $QUORUM "$@"
 else
-  ./consul agent -bind $CONSUL_IP -config-file ./consul.json $RETRY "$@"
+  consul agent -bind $CONSUL_IP -config-file ./config/consul/consul.json $RETRY "$@"
 fi

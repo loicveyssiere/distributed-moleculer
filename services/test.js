@@ -1,9 +1,9 @@
 const { ServiceBroker } = require("moleculer");
-const { loadConfig } = require("./config");
-const { nodeid, sleep, logger, streamToString, to } = require("./utils");
+const { loadConfig } = require("../config/dev/config");
+const { nodeid, sleep, logger, streamToString, to } = require("../utils/utils");
 const program = require("commander");
 const stream = require("stream");
-const s3 = require("./s3");
+const s3 = require("../utils/s3");
 const pQueue = require("p-queue");
 
 let itemsToGenerate = 1;

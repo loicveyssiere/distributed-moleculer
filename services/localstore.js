@@ -1,8 +1,8 @@
 const { ServiceBroker } = require("moleculer");
-const { loadConfig } = require("./config");
-const { death, nodeid, exit, to, logger } = require("./utils");
-const s3 = require("./s3");
-const datastore = require("./datastore");
+const { loadConfig } = require("../config/dev/config");
+const { death, nodeid, exit, to, logger } = require("../utils/utils");
+const s3 = require("../utils/s3");
+const datastore = require("../utils/datastore");
 
 // variables
 let running = false;

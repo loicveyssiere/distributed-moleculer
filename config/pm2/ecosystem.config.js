@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'worker',
-      script: './worker.js',
+      script: './services/worker.js',
       instances: 1,
       autorestart: true,
       watch: "worker.js",
@@ -12,7 +12,7 @@ module.exports = {
     },
     {
       name: 'controller',
-      script: './controller.js',
+      script: './services/controller.js',
       autorestart: true,
       watch: "controller.js",
       max_memory_restart: '1G',
@@ -21,28 +21,28 @@ module.exports = {
     },
     {
       name: "localstore",
-      script: "./start-localstore.sh",
+      script: "./scripts/start-localstore.sh",
       autorestart: true,
       watch: [ "localstore.js", "datastore.js" ],
       kill_timeout: 10000,
     },
     {
       name: 'remotestore',
-      script: "./start-remotestore.sh",
+      script: "./scripts/start-remotestore.sh",
       autorestart: true,
       watch: "remotestore.js",
       kill_timeout: 10000,
     },
     {
       name: "nats-local",
-      script: "./start-nats-local.sh",
+      script: "./scripts/start-nats-local.sh",
       autorestart: true,
       watch: false,
       max_memory_restart: '1G',
     },
     {
       name: "nats-remote",
-      script: "./start-nats-remote.sh",
+      script: "./scripts/start-nats-remote.sh",
       autorestart: true,
       watch: false,
       max_memory_restart: '1G',
@@ -65,12 +65,12 @@ module.exports = {
     },
     {
       name: "minio",
-      script: "./start-minio.sh",
+      script: "./scripts/start-minio.sh",
       autorestart: true
     },
     {
       name: "consul",
-      script: "./start-consul.sh",
+      script: "./scripts/start-consul.sh",
       autorestart: true
     }
   ],
