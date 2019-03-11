@@ -1,5 +1,5 @@
 const nedb = require("nedb-promises");
-const { to, logger } = require("./utils");
+const { to, logger, sleep } = require("./utils");
 const Probe = require('pmx').probe();
 
 const fields = {
@@ -18,8 +18,8 @@ const fields = {
     hostname: 1,
     error: 1,
     parentId: 1,
-    childsTotal: 1,
-    childsCompleted: 1,
+    childrenTotal: 1,
+    childrenCompleted: 1,
 };
 
 Probe.metric({ name: 'total', value: () => stats.total });
@@ -213,31 +213,16 @@ class DataStore {
         return task;
     }
 
-    async cachetake() {
-      let err, tasks;
-      let now = new Date().getTime();
-      if (now > this.date || this.tasks.length == 0) {
-        [err, tasks] = await to(this.db.find({ status: "input", nextTime: { $lt: new Date() } }, fields).sort({ priority: -1, tries: -1 }).limit(100));
-        if (err) { logger.error(err); throw err; }
-        this.tasks = tasks;
-        this.date = now + 10000;
-      }
-      return this.tasks.pop();
-    }
-
     // internal api
     async take() {
         let err, task;
         while (true) {
-            //[err, task] = await to(this.db.find({ status: "input", nextTime: { $lt: new Date() } }, fields).sort({ priority: -1, tries: -1 }).limit(1));
-            //if (err) { logger.error(err); throw err; }
-            //task = task[0];
-            //task = await this.cachetake();
             let id = this.cache.pop();
             [err, task] = await to(this.db.findOne({ _id: id }, fields));
+
             if (err) { logger.error(err); return null; }
             if (!task) return null;
-            if (task.status != "input" && task.input != "complete") continue;
+            if (task.status != "input" && task.status != "complete") continue;
             //
             [err, task] = await to(this.db.update(
                 { _id: task._id, status: { $in: ["input", "complete"] } },
@@ -261,19 +246,20 @@ class DataStore {
     }
 
     async save(item) {
+        logger.warn("SAVE")
         let err, task, parentTask;
         [err, task] = await to(this.db.findOne({ _id: item._id }));
         if (err) { logger.error(err); throw err; }
         if (!task) return;
         //
         // if status = work
-        //   if childs, status => wait, create childs
+        //   if children, status => wait, create children
         //   else status = output, update parent
         // if status = complete
         //   status => output
-        //   delete childs
+        //   delete children
         if (task.status === "work") {
-            if (item.childs) {
+            if (item.children) {
                 // status => wait
                 [err, task] = await to(this.db.update(
                     { _id: task._id },
@@ -284,17 +270,26 @@ class DataStore {
                             nextTime: null,
                             error: null,
                             hostname: item.hostname,
-                            childsCompleted: 0,
-                            childsTotal: item.childs.length,
+                            childrenCompleted: 0,
+                            childrenTotal: item.children.length,
                         }
                     },
                     { returnUpdatedDocs: true }
                 ));
-                if (err) { logger.error(err); throw err; }
-                // create childs (after status=wait, as childs may start immediately)
-                for (child of item.childs) {
-                    [err] = await insert(child, item._id);
-                    if (err) { logger.error(err); throw err; }
+                logger.info("success:", task);
+                logger.warn("WAIT");
+
+                // Insert the children
+                for (let child of item.children) {
+                    child.user = "sub";//item.user;
+                    child.name = "sub";//item.name;
+                    child.priority = item.priority;
+                    try {
+                        await this.insert(child, item._id); // TODO: check correctness
+                    } catch(e) {
+                        console.error("ERROR CATCH")
+                        console.log(e);
+                    }
                 }
             } else {
                 // status => output
@@ -322,14 +317,14 @@ class DataStore {
                         { _id: task.parentId, status: "wait" },
                         {
                             $inc: {
-                                process: task.duration,
-                                childsCompleted: 1,
+                                process: task.duration, // TODO: check what expected
+                                childrenCompleted: 1,
                             }
                         },
                         { returnUpdatedDocs: true }
                     ));
                     if (err) { logger.error(err); throw err; }
-                    if (parentTask.childsCompleted === parentTask.childsTotal) {
+                    if (parentTask.childrenCompleted === parentTask.childrenTotal) {
                         [err, parentTask] = await to(this.db.update(
                             { _id: task.parentId, status: "wait" },
                             {
@@ -340,6 +335,8 @@ class DataStore {
                             { returnUpdatedDocs: true }
                         ));
                         if (err) { logger.error(err); throw err; }
+                        // Add parent to list
+                        logger.warn("ADD PARENT")
                         this.cache.push(parentTask._id, parentTask.priority);
                     }
                 }
@@ -367,7 +364,7 @@ class DataStore {
             //
             stats.work--;
             stats.output++;
-            // remove all childs
+            // remove all children
             // TODO
         }
         //
@@ -381,7 +378,7 @@ class DataStore {
         if (!task) return;
         //
         if (task.tries < 10) {
-            task.status = task.childsTotal > 0 ? "complete" : "input";
+            task.status = task.childrenTotal > 0 ? "complete" : "input";
             task.tries++;
         } else {
             task.status = "error";
@@ -449,4 +446,23 @@ async function main() {
     console.log(c);
 
 };
-//main();
+
+const task = {
+    user: "user",
+    name: "name",
+    priority: 0,
+    input: 'input',
+    output: 'output'
+};
+
+async function main2() {
+    let dd = new DataStore();
+    err = await to(dd.save(1));
+    //r = await dd.save({
+    //    input: 'xf1yqCBmXGm8UXueilp2Yjt05gptm.in'
+    //}, 1)
+    await(dd.insert(task))
+    console.log(dd.cache)
+    console.log(dd.cache.pop())
+}
+main2();

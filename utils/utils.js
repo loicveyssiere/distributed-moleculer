@@ -1,3 +1,6 @@
+'use strict';
+
+const program = require("commander");
 const death = require("death")({ uncaughtException: true });
 const os = require("os");
 const nanoid = require("nanoid");
@@ -6,6 +9,28 @@ const stream = require('stream');
 const winston = require("winston");
 const { format } = require("logform");
 const { SPLAT } = require('triple-beam');
+
+// TODO: clean me
+function loadConfig(name) {
+    const config_name = process.env.NODE_ENV || "development"
+    const config_path = global.APP_ROOT_DIR + '/../config/service/' + config_name + '.config.js'
+    const configs = require(config_path)
+    const common = configs["common"];
+    const config = name && configs[name];
+    // FIXME: cause problems for executing tests
+    //program.option("-c, --config [file]", "configuration file").parse(process.argv);
+    const override = program.config && require(program.config);
+    const common2 = override && override.common;
+    const config2 = override && override[name];
+    const res = {
+        ...common,
+        ...common2,
+        ...config,
+        ...config2,
+    };
+    res.nodeID = nodeid(res.nodeID);
+    return res;
+}
 
 const alignedWithColorsAndTime = format.combine(
     format((info, opts) => {
@@ -74,6 +99,7 @@ function streamToString(stream) {
 }
 
 module.exports = {
+    loadConfig,
     sleep,
     death,
     nodeid,

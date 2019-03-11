@@ -1,45 +1,56 @@
+var node_env = process.env.NODE_ENV || "production"
+console.log(node_env)
+
 module.exports = {
   apps: [
     {
       name: 'z-worker',
-      script: './services/worker.js',
-      args: '-c ../../config/dev/config2.js',
+      script: './services/worker.service.js',
       instances: 2,
       autorestart: true,
-      watch: "worker.js",
+      watch: "worker.service.js",
       max_memory_restart: '1G',
       kill_timeout: 30000,
       exec_mode: "cluster",
+      env: {
+        NODE_ENV: node_env
+      }
     },
     {
       name: 'z-controller',
-      script: './services/controller.js',
-      args: '-c ../../config/dev/config2.js',
+      script: './services/controller.service.js',
       autorestart: true,
-      watch: "controller.js",
+      watch: "controller.service.js",
       max_memory_restart: '1G',
       kill_timeout: 10000,
       exec_mode: "cluster",
+      env: {
+        NODE_ENV: node_env
+      }
     },
     {
       name: 'z-localstore',
-      script: './services/localstore.js',
-      args: '-c ../../config/dev/config2.js',
+      script: './services/queuer.service.js',
       autorestart: true,
-      watch: "localstore.js",
+      watch: "queuer.service.js",
       max_memory_restart: '1G',
       kill_timeout: 10000,
       exec_mode: "cluster",
+      env: {
+        NODE_ENV: node_env
+      }
     },
     {
       name: 'z-remotestore',
       script: './services/remotestore.js',
-      args: '-c ../../config/dev/config2.js',
       autorestart: true,
       watch: "remotestore.js",
       max_memory_restart: '1G',
       kill_timeout: 10000,
       exec_mode: "cluster",
+      env: {
+        NODE_ENV: node_env
+      }
     },
     {
       name: "z-nats-local",
@@ -48,11 +59,6 @@ module.exports = {
       autorestart: true,
       watch: false,
       max_memory_restart: '1G',
-    },
-    {
-      name: "z-minio",
-      script: "./scripts/start-minio.sh",
-      autorestart: true
     },
     {
       name: "z-nats-local-board",

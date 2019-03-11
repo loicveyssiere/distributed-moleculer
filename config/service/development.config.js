@@ -1,5 +1,4 @@
-const program = require("commander");
-
+// here the configuration of a cluster (site)
 const common = {
     nodeID: "common",
     site: "dev",
@@ -21,15 +20,16 @@ const controller = {
 };
 
 const worker = {
+    exec: "./scripts-job/do.py",
     nodeID: "worker",
 };
 
-const localstore = {
-    nodeID: "localstore",
+const queuer = {
+    nodeID: "queuer",
 };
 
-const remotestore = {
-    nodeID: "remotestore",
+const stealer = {
+    nodeID: "stealer",
 };
 
 const global = {
@@ -56,28 +56,10 @@ const configs = {
     api,
     controller,
     worker,
-    localstore,
-    remotestore,
+    queuer,
+    stealer,
     global,
     s3,
 };
 
-function loadConfig(name) {
-    const config = name && configs[name];
-    program.option("-c, --config [file]", "configuration file").parse(process.argv);
-    const override = program.config && require(program.config);
-    const common2 = override && override.common;
-    const config2 = override && override[name];
-    const res = {
-        ...common,
-        ...common2,
-        ...config,
-        ...config2,
-    };
-    return res;
-}
-
-module.exports = {
-    ...configs,
-    loadConfig,
-};
+module.exports = configs;

@@ -1,10 +1,12 @@
 {
   "name": "test-moleculer",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Attempt to implement distributed tasks with moleculer",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "ecosystem": "pm2 start ./config/pm2/ecosystem.config.js",
+    "delete-ecosystem": "pm2 delete config/pm2/ecosystem.config.js",
+    "tester-ecosystem": "node services/test.js",
+    "test": "mocha"
   },
   "author": "",
   "license": "ISC",
@@ -12,6 +14,7 @@
     "commander": "^2.19.0",
     "death": "^1.1.0",
     "minio": "^7.0.5",
+    "mocha": "^6.0.2",
     "moleculer": "^0.13.7",
     "moleculer-repl": "^0.5.6",
     "nanoid": "^2.0.1",
@@ -22,6 +25,7 @@
     "p-queue": "^3.1.0",
     "pm2": "^3.3.1",
     "pmx": "^1.6.7",
+    "sinon": "^7.2.7",
     "winston": "^3.2.1"
   }
 }
