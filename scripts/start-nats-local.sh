@@ -1,5 +1,6 @@
 #/bin/sh
-cd "$(dirname "$0")"
+PATH_PROJECT="$(dirname "$0")"/../
+cd $PATH_PROJECT
 
 # dev conf
 NATS_LOCAL_PORT=4222
@@ -11,7 +12,7 @@ NATS_LOCAL_ROUTES=()
 [ -f ./start.conf ] && source ./start.conf
 
 # run
-./gnatsd --config <(
+gnatsd --config <(
 echo "port: $NATS_LOCAL_PORT"
 echo "http_port: $NATS_LOCAL_HTTP"
 echo "cluster {"

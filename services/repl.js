@@ -1,6 +1,5 @@
 const { ServiceBroker } = require("moleculer");
-const { loadConfig } = require("./config");
-const { nodeid } = require("./utils");
+const { loadConfig, nodeid } = require("../utils/utils");
 
 // create broker
 const config = {

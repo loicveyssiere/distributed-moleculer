@@ -1,6 +1,5 @@
 const Minio = require('minio')
-const { loadConfig } = require("./config");
-const { uuid } = require("./utils");
+const { loadConfig, uuid } = require("./utils");
 
 class Client {
     constructor() {

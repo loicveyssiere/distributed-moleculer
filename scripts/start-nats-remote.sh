@@ -1,5 +1,6 @@
 #/bin/sh
-cd "$(dirname "$0")"
+PATH_PROJECT="$(dirname "$0")"/../
+cd $PATH_PROJECT
 
 # dev conf
 NATS_REMOTE_PORT=5222
@@ -13,7 +14,7 @@ NATS_REMOTE_ROUTES=()
 # compute
 
 # run
-./gnatsd --config <(
+gnatsd --config <(
 echo "port: $NATS_REMOTE_PORT"
 echo "http_port: $NATS_REMOTE_HTTP"
 echo "cluster {"
