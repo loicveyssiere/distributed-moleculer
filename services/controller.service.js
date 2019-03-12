@@ -58,6 +58,8 @@ if (!module.parent) {
 /**
  * Entrypoint for Queuing new task to process
  * 
+ * @info Molecular forces to use a specific interface for streams. The stream
+ * needs the only param of ctx and other information goes to meta. 
  * @param {object} ctx Moleculer context, see the structure below
  * @param {object} ctx.params Stream of the document to process
  * @param {object} ctx.meta Task with fields: name(string), id(string), priority(int)

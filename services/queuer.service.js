@@ -76,6 +76,8 @@ if (!module.parent) {
 /**
  * Insert a new task in the queue data structure and update the storage
  * 
+ * @info Molecular forces to use a specific interface for streams. The stream
+ * needs the only param of ctx and other information goes to meta. 
  * @param {object} ctx.params Stream of the document to process
  * @param {object} ctx.meta Task with fields: name(string), id(string), priority(int)
  * @return {Task} A full Task object as described in the database 
@@ -83,7 +85,7 @@ if (!module.parent) {
 async function createTask(ctx) {
     let err, task, filename;
     task = ctx.meta;
-    logger.info("create:", task);
+    logger.debug("create:", task);
     //
     filename = s3.newFilename();
     task.input = `${filename}.in`;
@@ -97,7 +99,7 @@ async function createTask(ctx) {
     //
     task = toid(task);
     //
-    logger.info("created:", task);
+    logger.debug("created:", task);
     this.broker.broadcast("worker.wakeup");
     //
     return task;
@@ -113,7 +115,7 @@ async function createTask(ctx) {
 async function deleteTask(ctx) {
     let err, task;
     task = ctx.params;
-    logger.info("delete:", task);
+    logger.debug("delete:", task);
     task = fromid(task);
     //
     [err, task] = await to(datastore.delete(task));
@@ -124,7 +126,7 @@ async function deleteTask(ctx) {
     [err] = await to(s3.deleteFile(task.output));
     if (err) { logger.error(err); }
     //
-    logger.info("deleted:", task);
+    logger.debug("deleted:", task);
     return;
 }
 
@@ -137,7 +139,7 @@ async function deleteTask(ctx) {
 async function statusTask(ctx) {
     let err, task, filename;
     task = ctx.params;
-    logger.info("status:", task);
+    logger.debug("status:", task);
     //
     task = fromid(task);
     //
@@ -146,7 +148,7 @@ async function statusTask(ctx) {
     //
     task = toid(task);
     //
-    //logger.info("statusd:", task);
+    logger.debug("statusd:", task);
     return task;
 }
 
