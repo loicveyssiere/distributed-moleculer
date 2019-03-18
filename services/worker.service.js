@@ -37,6 +37,7 @@ const service = {
     methods: {
         success,
         failure,
+        work,
         run // Background job
     },
 
@@ -77,6 +78,9 @@ if (!module.parent) {
 /* -----------------------------------------------------------------------------
     PRIVATE
 ----------------------------------------------------------------------------- */
+/**
+ * Termination of a single job in case of no error
+ */
 async function success(task) {
     let err;
     task.result = "success";
@@ -84,8 +88,12 @@ async function success(task) {
     //logger.info("success:", task);
     [err] = await to(this.broker.call("controller.updateTask", task));
     if (err) { logger.error(err); }
+    return;
 }
 
+/**
+ * Termination of a single job in case of errors
+ */
 async function failure(task, error) {
     let err;
     task.result = "failure";
@@ -94,6 +102,143 @@ async function failure(task, error) {
     logger.info("failure:", task);
     [err] = await to(this.broker.call("controller.updateTask", task));
     if (err) { logger.error(err); }
+}
+
+/**
+ * A full processing job
+ */
+async function work(task) {
+    let err = null;
+
+    // prepare parameters
+    var json = {
+        ...task
+    }
+
+    // 1 - Get documents from S3 -----------------------------------------------
+    if (!err) {
+        // MERGE MODE 
+        if (task.children) {
+            logger.debug("MERGE MODE JS")
+            var input;
+            var tempName = uuid();
+            json.children = task.children;
+            
+            for (let [index, child] of json.children.entries()) {
+
+                child.tempInput = `/tmp/${tempName}.${index}.part.in`;
+
+                // get stream from s3
+                [err, input] = await to(s3.readFile(child.output));
+                logger.warn("READ S3 " + child.output);
+
+                if (!err) {
+                    [err] = await to(pipeline(input, fs.createWriteStream(child.tempInput)));
+                    
+                }   
+            }
+
+        } else { // SPLIT MODE or NORMAL MODE
+            logger.debug("NORMAL MODE JS")
+            var input;
+            var tempName = uuid();
+            
+            json.tempInput = `/tmp/${tempName}.in`;
+
+            // get stream from s3
+            [err, input] = await to(s3.readFile(json.input));
+            logger.warn("READ S3 " + json.input);
+    
+            // save stream to tempInput
+            if (!err) {
+                [err] = await to(pipeline(input, fs.createWriteStream(json.tempInput)));
+            }
+        }
+    }
+    
+    // 2 - Call the processing function ----------------------------------------
+    if (!err) {
+        try {
+            // Don't forget to add permission to the script (chmod a+x)
+            let promise = shellExec(this.broker.options.exec);
+            promise.child.stdin.write(JSON.stringify(json))
+            promise.child.stdin.end();
+
+            let outputs // stdout, stderr, cmd, code
+            [err, outputs] = await to(promise);
+            logger.info("stderr: " + outputs.stderr)
+            
+            var resultTask = outputs && outputs.stdout && JSON.parse(outputs.stdout);
+            logger.info(JSON.stringify(resultTask))
+
+        } catch (e) {
+            err = e;
+        }
+    }
+
+    // 3 - Push the documents to S3 --------------------------------------------
+    if (!err) {
+        if (resultTask.tempOutput) { // MERGE OR NORMAL MODE
+            logger.info("MERGE OR NORMAL")
+            [err] = await to(s3.writeFile(fs.createReadStream(resultTask.tempOutput), resultTask.output));
+            logger.warn("WRITE S3 " + resultTask.output);
+        } else {
+            logger.info("SPLIT")
+            for (let child of resultTask.children) {
+                var filename = s3.newFilename();
+                child.input = `${filename}.in`;
+                child.output = `${filename}.out`;
+                [err] = await to(s3.writeFile(fs.createReadStream(child.tempOutput), child.input));
+                logger.warn("WRITE S3 " + child.input);
+            }
+        }
+    }
+
+    // 4 - Clean temp files ----------------------------------------------------
+    if (!err) {
+        if (resultTask.tempInput) {
+            fs.unlink(resultTask.tempInput, () => { });
+        }
+        if (resultTask.tempOutput) {
+            fs.unlink(resultTask.tempOutput, () => { });
+        }
+        for (let child in json.children) {
+            if (child.tempInput) {
+                fs.unlink(child.tempInput, () => { });
+            }
+            if (child.tempOutput) {
+                fs.unlink(child.tempOutput, () => { });
+            }
+        }
+
+        if (!task.children && resultTask.children) {
+            task.children = [];
+            for (let child of resultTask.children) {
+                task.children.push({
+                    input: child.input,
+                    output: child.output
+                });
+            }
+        } else if (task.children && resultTask.children) {
+            for (let child in resultTask.children) {
+                if (child.output) {
+                    [err] = await to(s3.deleteFile(child.output));
+                }
+                delete task.children; // FIXME: we should do better
+            }  
+        }
+    }
+
+    // 5 - Finalization of the task: failure | success -------------------------
+    // return result async, so we can start next task asap
+    if (err) {
+        this.failure(task, err);
+        logger.warn("PB");
+        console.log(err)
+        logger.error(err);
+    } else {
+        this.success(task);
+    }
 }
 
 /**
@@ -124,122 +269,8 @@ async function run() {
         // if task found, process it
         logger.info("task:", task);
 
-        // 1 - Get documents from S3 -------------------------------------------
-        var tempInput, tempOutput
- 
-        if (!err) {
-            // MERGE MODE 
-            if (task.children) {
-                console.log("MERGE MODE JS")
-                var input;
-                var tempName = uuid();
-                tempOutput = `/tmp/${tempName}.out`;
-
-                for (let [index, child] of task.children.entries()) {
-
-                    child.tempInput = `/tmp/${tempName}.in.${index}`;
-                    // get stream from s3
-                    [err, input] = await to(s3.readFile(child.input));
-                    logger.warn("READ S3 " + child.input);
-
-                    if (!err) {
-                        [err] = await to(pipeline(input, fs.createWriteStream(child.tempInput)));
-                        
-                    }   
-                }
-
-            } else { // SPLIT MODE or NORMAL MODE
-                console.log("NORMAL MODE JS")
-                var input;
-                var tempName = uuid();
-                tempInput = `/tmp/${tempName}.in`;
-                tempOutput = `/tmp/${tempName}.out`;
-
-                // get stream from s3
-                [err, input] = await to(s3.readFile(task.input));
-                logger.warn("READ S3 " + task.input);
-        
-                // save stream to tempInput
-                if (!err) {
-                    [err] = await to(pipeline(input, fs.createWriteStream(tempInput)));
-                }
-            }
-        }
-        
-        // 2 - Call the processing function ------------------------------------
-        if (!err) {
-            try {
-                // Don't forget to add permission to the script (chmod a+x)
-                let promise = shellExec(this.broker.options.exec);
-                var json = {
-                    ...task,
-                    tempInput,
-                    tempOutput
-                } 
-                promise.child.stdin.write(JSON.stringify(json))
-                promise.child.stdin.end();
-
-                let outputs // stdout, stderr, cmd, code
-                [err, outputs] = await to(promise);
-                console.log(outputs.stderr)
-                
-                var result = outputs && outputs.stdout && JSON.parse(outputs.stdout);
-                logger.info(JSON.stringify(result))
-
-            } catch (e) {
-                err = e;
-            }
-        }
-
-        // 3 - Push the documents to S3 ----------------------------------------
-        if (!err) { 
-            if (result.children) { // SPLIT MODE 
-                for (let child of result.children) {
-                    var filename = s3.newFilename();
-                    child.input = `${filename}.in`;
-                    child.output = `${filename}.out`;
-                    [err] = await to(s3.writeFile(fs.createReadStream(child.tempInput), child.input));
-                    logger.warn("WRITE S3 " + child.input)
-                }
-            } else { // MERGE or NORMAL MODE
-                [err] = await to(s3.writeFile(fs.createReadStream(result.tempOutput), result.output));
-                logger.warn("WRITE S3 " + result.output);
-            }
-            
-        }
-
-
-        // 4 - Clean temp files ------------------------------------------------
-        if (!err) {
-            if (result.children) {
-                task.children = result.children;
-            }
-
-            fs.unlink(tempInput, () => { });
-            fs.unlink(tempOutput, () => { });
-            if (task.children) {
-                for (let child of task.children) {
-                    fs.unlink(child.tempInput, () => { })
-                }
-            }
-            if (result.children) {
-                for (let child of result.children) {
-                    fs.unlink(child.tempInput, () => { })
-                }
-            } 
-        }
-
-
-        // 5 - Finalization of the task: failure | success ---------------------
-        // return result async, so we can start next task asap
-        if (err) {
-            this.failure(task, err);
-            logger.warn("PB");
-            console.log(err)
-            logger.error(err);
-        } else {
-            this.success(task);
-        }
+        // Do the job, here await the job to finish
+        await this.work(task);  
     }
 
     // EXITING

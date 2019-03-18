@@ -69,7 +69,6 @@ async function createTask(ctx) { //user,name,priority?
     let err, task, stream;
     task = ctx.meta;
     stream = ctx.params;
-    logger.info("create:", task);
     [err, task] = await to(this.broker.call("queuer.createTask", stream, { meta: task }));
     if (err) { logger.error(err); throw err; } //TODO return xxx if failed
     return task;
@@ -85,7 +84,6 @@ async function createTask(ctx) { //user,name,priority?
 async function deleteTask(ctx) { //user,id
     let err, task;
     task = ctx.params;
-    logger.info("delete:", task);
     [err, task] = await to(this.broker.call(`${store(task)}.deleteTask`, task));
     if (err) { logger.error(err); throw err; } //TODO return xxx if failed
     return task;
@@ -102,7 +100,6 @@ async function deleteTask(ctx) { //user,id
 async function statusTask(ctx) {
     let err, task;
     task = ctx.params;
-    logger.info("status:", task);
     [err, task] = await to(this.broker.call(`${store(task)}.statusTask`, task));
     if (err) { logger.error(err); throw err; } //TODO: define return with 'missing' if not exists ?
     return task;
@@ -116,7 +113,6 @@ async function statusTask(ctx) {
 async function resultTask(ctx) {
     let err, task;
     task = ctx.params;
-    logger.info("result:", task);
     [err, task] = await to(this.broker.call(`${store(task)}.resultTask`, task));
     if (err) { logger.error(err); throw err; } //TODO define return 404 if not exist 
     return stream;
@@ -133,13 +129,13 @@ async function pullTask() {
     [err, task] = await to(this.broker.call("queuer.pullTask"));
     if (err) { logger.error(err); }
     if (!err && task != null) {
-        logger.info("pulld:", task);
+        logger.debug("pull local:", task);
         return task;
     }
     [err, task] = await to(this.broker.call("stealer.pullTask"));
     if (err) { logger.error(err); }
     if (!err && task != null) {
-        logger.info("pulld:", task);
+        logger.debug("pull remote:", task);
         return task;
     }
     return null;

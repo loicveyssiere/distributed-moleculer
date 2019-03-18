@@ -83,25 +83,26 @@ if (!module.parent) {
  * @return {Task} A full Task object as described in the database 
  */
 async function createTask(ctx) {
-    let err, task, filename;
+    let err, task, dataS3, filename;
     task = ctx.meta;
     logger.debug("create:", task);
-    //
+    
     filename = s3.newFilename();
     task.input = `${filename}.in`;
     task.output = `${filename}.out`;
-    //
-    [err, etag] = await to(s3.writeFile(ctx.params, task.input));
+
+    [err, dataS3] = await to(s3.writeFile(ctx.params, task.input));
     if (err) { logger.error(err); throw err; }
-    //
+    
     [err, task] = await to(datastore.insert(task));
     if (err) { logger.error(err); throw err; }
-    //
+    
+    // generate a full global id
     task = toid(task);
-    //
+    
     logger.debug("created:", task);
     this.broker.broadcast("worker.wakeup");
-    //
+    
     return task;
 }
 

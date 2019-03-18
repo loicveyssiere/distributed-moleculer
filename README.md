@@ -7,21 +7,14 @@ document processing. The heterogeneity of the task to be processed imposes a
 
 ## TODO
 
-- [x] change childs to children
-- [ ] Merge documents need to have all files in the task
-- [ ] documentation of all task update structure
-- [ ] generate input output in task (worker)
-- [ ] Merge document (delete properly all subdocuments)
-- [ ] Change input output to let the script creating it own output names
-- [ ] Separation and isolation of datastore and data structures
-- [x] Finish refactoring in similar services with renaming
+- [ ] Simplification of the `save` function
 - [ ] Finish to add basic documentation of all different actions
 - [ ] Finish to write a basic version of the readme file
+- [ ] Bug, the cache structure set isEmpty to true whereas the cache is not empty
 
 ## Backlogs
 
 - [ ] Replace neDB by HBase -> tasks (hbase) billing (hbase + aggregation hbase -> sql server)
-- [ ] Inspect multipage and child-parent mechanism
 - [ ] Security et certificates : gnatsd global
 - [ ] Minio load testing (read and write volume charge for documents)
 - rest interface
@@ -45,13 +38,26 @@ document processing. The heterogeneity of the task to be processed imposes a
 
 ## Done
 
+- [x] Inherit name and user for parent, modify the do.py to split if the file contains multiple lines.
+- [x] Inspect multipage and child-parent mechanism
+- [x] Merge documents need to have all files in the task
+- [x] generate input output in task (worker)
+- [x] Merge document (delete properly all subdocuments)
+- [x] Change input output to let the script creating it own output names
+- [x] Separation and isolation of datastore and data structures
+- [x] Finish refactoring in similar services with renaming
+- [x] documentation of all task update structure
+- [x] change childs to children
 - [x] Implement 3 modes of worker. in py and js
 - [x] execute python with config of the path and enable only script (shebang mode)
 - [x] worker : replace copy by calling script and in/out
 
 ## Questions
 
-- Do we need a lock for the stealer service ?
+- Do we need a lock for the stealer service?
+  - Answer: ...
+
+- Recursive splitting: is it a useful feature or should we disable it for stability?
   - Answer: ...
 
 ## Vocabulary
@@ -86,8 +92,8 @@ external platform, such as a cluster, grid, or a cloud.
 
 - `worker`: a micro-service in charge of processing the task
 - `controller`: a micro-service routing the different requests of the client
-- `queuer`: a micro-service that maintain a queue list of task with persistence
-- `stealer`: a micro-service that proxy a remote queue used for the job stealing
+- `queuer`: a micro-service that maintains a queue list of task with persistence
+- `stealer`: a micro-service that proxies a remote queue used for the job stealing
 
 ### Status
 
@@ -124,9 +130,6 @@ Start an ecosystem with `pm2`
 ```bash
 NODE_ENV=development pm2 start config/pm2/ecosystem.config.js
 ```
-
-
-
 
 ## Specification
 
