@@ -3,7 +3,7 @@
 global.APP_ROOT_DIR = global.APP_ROOT_DIR || __dirname;
 
 const { ServiceBroker } = require("moleculer");
-const { loadConfig, death, exit, to, logger } = require(global.APP_ROOT_DIR + "/../utils/utils");
+const { loadConfig, death, exit, to, logger } = require(global.APP_ROOT_DIR + "/../common/utils");
 
 // Constants
 const SERVICE_NAME = "controller";
@@ -75,7 +75,7 @@ async function createTask(ctx) { //user,name,priority?
 }
 
 /**
- * Entrypoint to remove a task from the queue with associated documents
+ * Entrypoint to remove a task from the queue and associated documents
  * 
  * @param {object} ctx Moleculer context, see the structure below
  * @param {object} ctx.params Task with field: id(string)
@@ -108,7 +108,7 @@ async function statusTask(ctx) {
 /**
  * @param {object} ctx Moleculer context, see the structure below
  * @param {object} ctx.params Task with field: id(string)
- * @return {Stream} Stream of the processed document  
+ * @return {Stream} Stream of the processed (result) document  
  */
 async function resultTask(ctx) {
     let err, task;
@@ -133,7 +133,7 @@ async function pullTask() {
         return task;
     }
     [err, task] = await to(this.broker.call("stealer.pullTask"));
-    if (err) { logger.error(err); }
+    if (err) { logger.debug(err); }
     if (!err && task != null) {
         logger.debug("pull remote:", task);
         return task;

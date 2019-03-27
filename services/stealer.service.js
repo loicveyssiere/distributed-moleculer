@@ -3,7 +3,7 @@
 global.APP_ROOT_DIR = global.APP_ROOT_DIR || __dirname;
 
 const { ServiceBroker } = require("moleculer");
-const { loadConfig, death, nodeid, exit, uuid, to, logger } = require(global.APP_ROOT_DIR + "/../utils/utils");
+const { loadConfig, death, nodeid, exit, uuid, to, logger } = require(global.APP_ROOT_DIR + "/../common/utils");
 
 // Constants
 const SERVICE_NAME = "stealer";

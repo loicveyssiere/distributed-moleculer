@@ -1,10 +1,10 @@
 global.APP_ROOT_DIR = global.APP_ROOT_DIR || __dirname;
 
 const { ServiceBroker } = require("moleculer");
-const { loadConfig, nodeid, sleep, logger, streamToString, to } = require("../utils/utils");
+const { loadConfig, nodeid, sleep, logger, streamToString, to } = require("../common/utils");
 const program = require("commander");
 const stream = require("stream");
-const s3 = require("../utils/s3");
+const s3 = require("../common/s3");
 const pQueue = require("p-queue");
 
 let itemsToGenerate = 1;

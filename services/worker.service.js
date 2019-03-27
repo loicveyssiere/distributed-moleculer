@@ -5,9 +5,9 @@ global.APP_ROOT_DIR = global.APP_ROOT_DIR || __dirname;
 const { ServiceBroker } = require("moleculer");
 const fs = require("fs");
 const { loadConfig, death, exit, uuid, pipeline, to, logger, shortname, sleep }
-    = require(global.APP_ROOT_DIR + "/../utils/utils");
-const s3 = require(global.APP_ROOT_DIR + "/../utils/s3");
-const shellExec = require(global.APP_ROOT_DIR + '/../utils/shell-exec')
+    = require(global.APP_ROOT_DIR + "/../common/utils");
+const s3 = require(global.APP_ROOT_DIR + "/../common/s3");
+const shellExec = require(global.APP_ROOT_DIR + '/../common/shell-exec')
 
 // Constants
 const SERVICE_NAME = "worker";
@@ -48,7 +48,7 @@ const service = {
         } catch (e) {
             logger.error(e);
         }
-        setInterval(this.run, 5000);
+        setInterval(this.run, config.restartInterval);
     }
 }
 
@@ -274,7 +274,7 @@ async function run() {
     }
 
     // EXITING
-    exit(5000);
+    exit(config.exitWaitTime);
     await this.broker.stop();
     process.exit();
 }

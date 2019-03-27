@@ -32,6 +32,52 @@ function loadConfig(name) {
     return res;
 }
 
+const log_level = process.env.LOG_LEVEL || 'info';
+
+/**
+ * Return the log message if it is a string or decompose an Error object to
+ * provide message and stack strings.
+ * @param {string} key 
+ * @param {*} value A log message or an error object
+ * @return {*} A decomposition of error messages or just the value
+ */
+function errorReplacer(key, value) {
+    if (value instanceof Error) {
+       return { message: value.message, stack: value.stack };
+    }
+    return value;
+ }
+  
+ const logFormat = winston.format.printf((info) => {
+    return `${JSON.stringify(info, errorReplacer)}`;
+ });
+ 
+ const logger = winston.createLogger({
+    level: log_level,
+    format: winston.format.combine(
+        format((info, opts) => {
+            if (!info[SPLAT]) return info;
+            var s = info[SPLAT].map(s => util.inspect(s, { breakLength: Infinity })).join(" ");
+            info.message = util.format(info.message, s);
+            return info;
+        })(),
+       winston.format.splat(),
+       format.colorize(),
+       winston.format.timestamp(),
+       logFormat,
+       
+ 
+       winston.format.printf( (info, opts) => {
+          const ts = info.timestamp.slice(0, 19).replace('T', ' ');
+          return `${ts} [${info.level}]: \t${info.message} ${(info.stack ? '\n' + info.stack : '')}`;
+       })
+    ),
+    transports: [
+       new winston.transports.Console()
+     ]
+ });
+
+ /*
 const alignedWithColorsAndTime = format.combine(
     format((info, opts) => {
         if (!info[SPLAT]) return info;
@@ -49,6 +95,7 @@ const logger = winston.createLogger({
     format: alignedWithColorsAndTime,
 });
 logger.add(new winston.transports.Console);
+*/
 
 function to(promise) {
     return promise.then(
