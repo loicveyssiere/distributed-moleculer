@@ -1,5 +1,20 @@
 #!/usr/bin/env python 
 
+"""
+
+The input task (json string) is read on stdin:
+{
+    user, name, status, input, output, childrenCompleted, childrenTotal # to use later
+    tempInput | children
+}
+
+The output task (json string) is written on stdout:
+{
+    tempOutput | children
+}
+
+"""
+
 import json 
 import sys
 import time
@@ -8,53 +23,72 @@ data = sys.stdin.readlines()
 json_input = json.loads(data[0])
 
 split = True
-n_split = 2
+n_split = 1
+
+if ("tempInput" in json_input):
+    with open(json_input["tempInput"], 'r') as f:
+        n_split = len(f.readlines())
+
 merge = ("childrenCompleted" in json_input and "childrenTotal" in json_input) \
     and json_input["childrenCompleted"] == json_input["childrenTotal"]
-split = (json_input["name"] == "test-split#1")
+split = (n_split > 1)
 
+# ------------------------------------------------------------------------------
 # Mode 1 => If child exists, merge document into a single one
-if (merge): # TODO: create a real merge by iterating on children
-    json_output = json_input
+# ------------------------------------------------------------------------------
+if (merge):
     print("MERGE MODE PYTHON ", file=sys.stderr)
-    with open(json_input["tempOutput"], 'w') as f_out:
-        with open(json_input["tempInput"], 'r') as f_in:            
+    json_output = json_input
+    print(json_input["children"], file=sys.stderr)
+    tempOutputName = json_input["children"][0]["tempInput"].split('.')[0] + ".out"
+    json_output["tempOutput"] = tempOutputName
+    tempOutput = open(tempOutputName, 'w')
+    
+    for child in json_input["children"]:
+        tempInput = open(child["tempInput"], 'r')
+        content = tempInput.readline()
+        print("content " + content, file=sys.stderr)
+        tempOutput.write(content)
+        tempInput.close()
 
-            for line in f_in:
-                f_out.write("out:" + line)
+    tempOutput.close()
 
-            json_output = json_input
-
-        #for child in json_output["children"]:
-        #    with open(child["tempInput"], 'r') as f_in:
-        #        for line in f_in:
-        #            f_out.write("out:" + line)
-
-
+# ------------------------------------------------------------------------------
 # Mode 2 => If document too big, split it into parts
+# ------------------------------------------------------------------------------
 elif (split):
     print("SPLIT MODE PYTHON", file=sys.stderr)
     json_output = json_input
     json_output["children"] = []
-    for i in range(n_split):
-        input = "{}.{}.part".format(json_input["tempInput"], str(i))
-        json_output["children"].append({"tempInput": input})
-        with open(input, 'w') as f:
-            f.write('child:test')
 
+    name = json_input["tempInput"].split(".")[0]
+
+    with open(json_input["tempInput"], 'r') as f:
+        for index, line in enumerate(f.readlines()):
+            childTempOutputName = "{}.{}.part.out".format(name, str(index))
+            json_output["children"].append({
+                "tempOutput": childTempOutputName
+            })
+            with open(childTempOutputName, 'w') as f:
+                f.write(line)
+
+# ------------------------------------------------------------------------------
 # Mode 3 => If normal condition, processing of the document and output it in local
+# ------------------------------------------------------------------------------
 else:
     print("NORMAL MODE PYTHON", file=sys.stderr)
-    with open(json_input["tempOutput"], 'w') as f_out:
-        with open(json_input["tempInput"], 'r') as f_in:            
-    
-            # compute
-            #time.sleep(4.0 + 2.0*random.random())
+    json_output = json_input
 
-            for line in f_in:
-                f_out.write("out:" + line)
+    tempInput = open(json_input["tempInput"], 'r')
+    tempOutputName = json_input["tempInput"].split('.')[0] + ".out"
+    json_output["tempOutput"] = tempOutputName
+    tempOutput = open(tempOutputName, 'w')
 
-            json_output = json_input
+    for line in tempInput:
+        tempOutput.write("out:" + line)
+
+    tempInput.close()
+    tempOutput.close()
 
 # Write result in stdout
 print("{}".format(json.dumps(json_output)))

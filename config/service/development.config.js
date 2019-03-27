@@ -21,6 +21,8 @@ const controller = {
 
 const worker = {
     exec: "./scripts-job/do.py",
+    restartInterval: 5000,
+    exitWaitTime: 5000,
     nodeID: "worker",
 };
 

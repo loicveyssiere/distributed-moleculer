@@ -1,12 +1,13 @@
-//'use strict';
+'use strict';
 
 global.APP_ROOT_DIR = global.APP_ROOT_DIR || __dirname;
 
 
 const { ServiceBroker } = require("moleculer");
-const { loadConfig, death, exit, to, logger } = require(global.APP_ROOT_DIR + "/../utils/utils");
-const s3 = require(global.APP_ROOT_DIR + "/../utils/s3");
-const datastore = require(global.APP_ROOT_DIR + "/../utils/datastore");
+const { loadConfig, death, exit, to, logger } = require(global.APP_ROOT_DIR + "/../common/utils");
+const s3 = require(global.APP_ROOT_DIR + "/../common/s3");
+const DataStore = require(global.APP_ROOT_DIR + "/../common/datastore");
+//const datastore = require(global.APP_ROOT_DIR + "/../common/datastore");
 
 // Constants
 const SERVICE_NAME = "queuer";
@@ -24,6 +25,9 @@ const broker = new ServiceBroker(config);
 // Service description
 const service = {
     name: SERVICE_NAME,
+    settings: {
+        datastore: null
+    },
     actions: {
         // external api
         createTask,
@@ -35,11 +39,14 @@ const service = {
         updateTask
     },
     methods: {
+        reload,
         run // Background job
     },
     async started() {
         // Fired when `broker.start()` called.
         try {
+            this.settings.datastore = new DataStore();
+            this.reload();
             this.run();
         } catch (e) {
             logger.error(e);
@@ -83,25 +90,26 @@ if (!module.parent) {
  * @return {Task} A full Task object as described in the database 
  */
 async function createTask(ctx) {
-    let err, task, filename;
+    let err, task, dataS3, filename;
     task = ctx.meta;
     logger.debug("create:", task);
-    //
+    
     filename = s3.newFilename();
     task.input = `${filename}.in`;
     task.output = `${filename}.out`;
-    //
-    [err, etag] = await to(s3.writeFile(ctx.params, task.input));
+
+    [err, dataS3] = await to(s3.writeFile(ctx.params, task.input));
     if (err) { logger.error(err); throw err; }
-    //
-    [err, task] = await to(datastore.insert(task));
+    
+    [err, task] = await to(this.settings.datastore.insert(task));
     if (err) { logger.error(err); throw err; }
-    //
+    
+    // generate a full global id
     task = toid(task);
-    //
+    
     logger.debug("created:", task);
     this.broker.broadcast("worker.wakeup");
-    //
+    
     return task;
 }
 
@@ -118,7 +126,7 @@ async function deleteTask(ctx) {
     logger.debug("delete:", task);
     task = fromid(task);
     //
-    [err, task] = await to(datastore.delete(task));
+    [err, task] = await to(this.settings.datastore.delete(task));
     if (err) { logger.error(err); throw err; }
     //
     [err] = await to(s3.deleteFile(task.input));
@@ -143,7 +151,7 @@ async function statusTask(ctx) {
     //
     task = fromid(task);
     //
-    [err, task] = await to(datastore.select(task));
+    [err, task] = await to(this.settings.datastore.select(task));
     if (err) { logger.error(err); throw err; }
     //
     task = toid(task);
@@ -165,7 +173,7 @@ async function resultTask(ctx) {
     
     task = fromid(task);
     
-    [err, task] = await to(datastore.select(task));
+    [err, task] = await to(this.settings.datastore.select(task));
     if (err) { logger.error(err); throw err; }
     
     [err, stream] = await to(s3.readFile(task.input));
@@ -181,7 +189,7 @@ async function resultTask(ctx) {
  */
 async function pullTask() {
     let err, task;
-    [err, task] = await to(datastore.take());
+    [err, task] = await to(this.settings.datastore.take());
     if (err) { logger.error(err);  err; }
     if (!task) return null;
     
@@ -204,10 +212,10 @@ async function updateTask(ctx) {
     task = fromid(task);
     //
     if (task.result === "success") {
-        [err] = await to(datastore.save(task));
+        [err] = await to(this.settings.datastore.save(task));
         if (err) { logger.error(err); throw err; }
     } else {
-        [err] = await to(datastore.undo(task));
+        [err] = await to(this.settings.datastore.undo(task));
         if (err) { logger.error(err); throw err; }
     }
     //
@@ -223,6 +231,11 @@ async function updateTask(ctx) {
 let toid = t => { t.id = `${config.site}:${t._id}`; return t; }
 let fromid = t => { t._id = t.id.split(':')[1]; return t; }
 
+async function reload() {
+    logger.debug("reload from database");
+    await this.settings.datastore.reload();
+}
+
 async function run() {
     logger.debug("run called");
 
@@ -236,7 +249,7 @@ async function run() {
         let err, stats;
         //
         if (!err) {
-            [err, stats] = await to(datastore.stats());
+            [err, stats] = await to(this.settings.datastore.stats());
             if (err) { logger.error(err); }
         }
         //

@@ -7,26 +7,21 @@ document processing. The heterogeneity of the task to be processed imposes a
 
 ## TODO
 
-- [x] change childs to children
-- [ ] Merge documents need to have all files in the task
-- [ ] documentation of all task update structure
-- [ ] generate input output in task (worker)
-- [ ] Merge document (delete properly all subdocuments)
-- [ ] Change input output to let the script creating it own output names
-- [ ] Separation and isolation of datastore and data structures
-- [x] Finish refactoring in similar services with renaming
-- [ ] Finish to add basic documentation of all different actions
-- [ ] Finish to write a basic version of the readme file
+- [ ] Simplification of the `save` function of datastore
+- [ ] Inspect structure, FIFO seems weird with priority (tests)
+- [ ] Bug, the cache structure set isEmpty to true whereas the cache is not empty
+- [ ] create one table per priority for the reloading process
+- [ ] Bug critical, when the job script fails, the worker seems to exit its main loop
+- [ ] Security et certificates : gnatsd global
+- [ ] Minio load testing (read and write volume charge for documents)
+- [ ] When hbase emits an error, should restart the service
+- [ ] rest interface
+- [ ] implementation of the API (`high level` -> running doc, my docs, processed doc ... `low level` -> createTask, statusTask ...)
+- [ ] define and document API that strike the system
+- [ ] Enable a working library without the stealer
 
 ## Backlogs
 
-- [ ] Replace neDB by HBase -> tasks (hbase) billing (hbase + aggregation hbase -> sql server)
-- [ ] Inspect multipage and child-parent mechanism
-- [ ] Security et certificates : gnatsd global
-- [ ] Minio load testing (read and write volume charge for documents)
-- rest interface
-- [ ] implementation of the API (`high level` -> running doc, my docs, processed doc ... `low level` -> createTask, statusTask ...)
-- [ ] define and document API that strike the system
 - [ ] Add a processedBy field to do stats on offloading
 - [ ] Add stat outputs in test to show offloading results
 - [ ] Define and implement a statistic system gathering and avoid using logs
@@ -42,16 +37,39 @@ document processing. The heterogeneity of the task to be processed imposes a
 - [ ] keep in mind that the configuration system is able to override an existing config
 - [ ] Make a (very) great schema of the full architecture with Visio
 - [ ] Implementation of Plate offloading with multi-queues
+- [ ] Reloading from database
 
 ## Done
 
+- [x] Refacto id with priority in the string (0001:id)
+- [x] refacto update with object in params and return object boolean option
+- [x] Scan task in hbase to enable recovery
+- [x] Finish to write a basic version of the readme file
+- [x] Replace neDB by HBase -> tasks (hbase) billing (hbase + aggregation hbase -> sql server)
+- [x] Finish to add basic documentation of all different actions
+- [x] Inherit name and user for parent, modify the do.py to split if the file contains multiple lines.
+- [x] Inspect multipage and child-parent mechanism
+- [x] Merge documents need to have all files in the task
+- [x] generate input output in task (worker)
+- [x] Merge document (delete properly all subdocuments)
+- [x] Change input output to let the script creating it own output names
+- [x] Separation and isolation of datastore and data structures
+- [x] Finish refactoring in similar services with renaming
+- [x] documentation of all task update structure
+- [x] change childs to children
 - [x] Implement 3 modes of worker. in py and js
 - [x] execute python with config of the path and enable only script (shebang mode)
 - [x] worker : replace copy by calling script and in/out
 
 ## Questions
 
-- Do we need a lock for the stealer service ?
+- Should we use NATS for minio (link)[https://github.com/nats-io/demo-minio-nats]‡
+  - Answer: ...
+
+- Do we need a lock for the stealer service?
+  - Answer: ...
+
+- Recursive splitting: is it a useful feature or should we disable it for stability?
   - Answer: ...
 
 ## Vocabulary
@@ -86,8 +104,8 @@ external platform, such as a cluster, grid, or a cloud.
 
 - `worker`: a micro-service in charge of processing the task
 - `controller`: a micro-service routing the different requests of the client
-- `queuer`: a micro-service that maintain a queue list of task with persistence
-- `stealer`: a micro-service that proxy a remote queue used for the job stealing
+- `queuer`: a micro-service that maintains a queue list of task with persistence
+- `stealer`: a micro-service that proxies a remote queue used for the job stealing
 
 ### Status
 
@@ -125,12 +143,89 @@ Start an ecosystem with `pm2`
 NODE_ENV=development pm2 start config/pm2/ecosystem.config.js
 ```
 
+## Project Structure
 
+### Hierarchy
 
+- common
+- config
+- scripts
+- scripts-job
+- services
+- tests
+
+### Services
+
+#### Controller
+
+Entrypoint and router of client demands
+
+- api.createTask(stream, meta { task })
+- api.deleteTask(task)
+- api.statusTask(task)
+- api.resultTask(task)
+
+return { result: "success|failure", err: (null|err) }
+
+#### Worker
+
+#### Queuer
+
+#### Stealer
 
 ## Specification
 
-### task
+### MVP 1.0 - Basics
+
+1. [ ] Micro-services architecture with worker, controller, queuer communicating
+  with NATS.
+2. [ ] The system is built on a queue with specifications
+    - [ ] Prioritized
+    - [ ] In-memory logic control
+    - [ ] Stored information qnd status in database
+    - [ ] Possible reloading of the In-memory storage
+3. [ ] The controller manage the requests with:
+    - [ ] A task can be added to the queue for processing
+    - [ ] An existing task can be selected to check the status and the embedded information
+    - [ ] An existing task can be selected to return the result of the processing
+4. [ ] The worker processes the task with:
+    - [ ] A worker is able to pull, and process a simple task
+    - [ ] A worker is able to split a task in children tasks if necessary
+    - [ ] A worker is able to merge a task if contains children that are completed
+
+### MVP 1.1 - Job Stealing
+
+1. [ ] Steal jobs form another cluster
+2. [ ] Security with TLS certificates for the communication extra-sites.
+
+### MVP 1.2 - API Interface
+
+1. [ ] Swagger specifications
+
+### Task model
+
+| Name              | Type                  | Description                      |
+|-------------------|:---------------------:|----------------------------------|
+|id                 |string                 |Identifier                        |
+|user               |string                 |??                                |
+|name               |string                 |??                                |
+|status             |string                 |see status                        |
+|priority           |long                   |0 for very low, 100 for the most important|
+|input              |string                 |input file name                   |
+|output             |string                 |output file name                  |
+|submitTime         |string                 |Unix 13 digits                    |
+|startTime          |string                 |Unix 13 digits                    |
+|nextTime           |string                 |Deprecated                        |
+|duration           |long                   |in milliseconds                   |
+|process            |long                   |in milliseconds                   |
+|tries              |string                 |number of previous fails          |
+|hostname           |string                 |                                  |
+|error              |string                 |message log                       |
+|parentId           |string                 |if any                            |
+|childrenTotal      |long                   |if task is a parent               |
+|childrenCompleted  |long                   |if task is a parent               |
+|children           |object                 |object list with children ids     |
+
 
 id : site#id
 name: customer task name
@@ -154,23 +249,6 @@ status:
 Entrypoint for external call is `api`.
 
 task.id => site#id
-
-### Controller
-
-Entrypoint and router of client demands
-
-- api.createTask(stream, meta { task })
-- api.deleteTask(task)
-- api.statusTask(task)
-- api.resultTask(task)
-
-return { result: "success|failure", err: (null|err) }
-
-### Worker
-
-### Queuer
-
-### Stealer
 
 ## Tests
 

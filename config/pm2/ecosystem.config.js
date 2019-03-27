@@ -31,7 +31,7 @@ module.exports = {
       script: "./scripts/start-queuer.sh",
       autorestart: true,
       watch: [
-        "./services/queuer.service.js", "./utils/datastore.js"
+        "./services/queuer.service.js", "./common/datastore.js", "./common/*"
       ],
       kill_timeout: 3000,
       env: {
