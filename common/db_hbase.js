@@ -315,6 +315,26 @@ class db {
                 );
             } else if (check && increment) { // --------------------------------
                 return reject("not implemented, not possible in this version");
+            } else if (set && increment) { // ----------------------------------
+                self.client.put(table, put, function(err, result) {
+                    if (err) {
+                        return reject(err);
+                    } else {
+                        if (!result.processed) {
+                            logger.error("error");
+                            return reject("not processed");
+                        } else {
+                            self.client.increment(table, inc, function(err, result) {
+                                if (err) {
+                                    return reject(err);
+                                } else {
+                                    // result.processed broken here
+                                    return filterReturnTask(id);
+                                }
+                            });
+                        }
+                    }
+                });
             } else if (set) { // -----------------------------------------------
 
                 self.client.put(table, put, function(err, result) {

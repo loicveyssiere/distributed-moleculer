@@ -7,21 +7,23 @@ document processing. The heterogeneity of the task to be processed imposes a
 
 ## TODO
 
-- [ ] Simplification of the `save` function of datastore
 - [ ] Inspect structure, FIFO seems weird with priority (tests)
 - [ ] Bug, the cache structure set isEmpty to true whereas the cache is not empty
-- [ ] create one table per priority for the reloading process
 - [ ] Bug critical, when the job script fails, the worker seems to exit its main loop
-- [ ] Security et certificates : gnatsd global
 - [ ] Minio load testing (read and write volume charge for documents)
-- [ ] When hbase emits an error, should restart the service
-- [ ] rest interface
-- [ ] implementation of the API (`high level` -> running doc, my docs, processed doc ... `low level` -> createTask, statusTask ...)
+- [ ] Bug, when hbase emits an error, we should restart the service
 - [ ] define and document API that strike the system
-- [ ] Enable a working library without the stealer
+- [ ] API: Authentication
+- [ ] API: Authorization with quotas
+- [ ] API: Swagger validation of the response
+- [ ] API: Log usage for monitoring
 
 ## Backlogs
 
+- [ ] Enable a working library without the stealer
+- [ ] rest interface
+- [ ] implementation of the API (`high level` -> running doc, my docs, processed doc ... `low level` -> createTask, statusTask ...)
+- [ ] Big topic on stats to enhanced for job stealing.
 - [ ] Add a processedBy field to do stats on offloading
 - [ ] Add stat outputs in test to show offloading results
 - [ ] Define and implement a statistic system gathering and avoid using logs
@@ -29,7 +31,6 @@ document processing. The heterogeneity of the task to be processed imposes a
 - [ ] In relation with statistic, how to get the running, working, completed jobs? my docs ... problem of offloading (scanning is impossible) and perhaps offloading needs to be reported to the queuer?
 - [ ] In relation with statistic, define and implement a billing database system
 - [ ] api-key with quotas, offloading access and priority
-- [ ] Replace sleep (worker) by a script loading
 - [ ] Consider to pre-load the task env, start JVM?, pre-start the script?
 - [ ] Define interface for script (worker), requirements, postulate etc ...
 - [ ] Re-implementation of stealer with job stealing cleaner
@@ -37,10 +38,16 @@ document processing. The heterogeneity of the task to be processed imposes a
 - [ ] keep in mind that the configuration system is able to override an existing config
 - [ ] Make a (very) great schema of the full architecture with Visio
 - [ ] Implementation of Plate offloading with multi-queues
-- [ ] Reloading from database
 
 ## Done
 
+- [x] API: Swagger validation of the request
+- [x] Add a wakeup if task generate child or complete a task
+- [x] Simplification of the `save` function of datastore
+- [x] Replace sleep (worker) by a script loading
+- [x] Security et certificates : gnatsd global
+- [x] Reloading from database
+- [x] create one table per priority for the reloading process
 - [x] Refacto id with priority in the string (0001:id)
 - [x] refacto update with object in params and return object boolean option
 - [x] Scan task in hbase to enable recovery
@@ -71,6 +78,22 @@ document processing. The heterogeneity of the task to be processed imposes a
 
 - Recursive splitting: is it a useful feature or should we disable it for stability?
   - Answer: ...
+
+## Usage
+
+Prepare the bucket:
+
+```bash
+mkdir -p /tmp/ocr-ms/moleculer/
+cd /tmp/ocr-ms/moleculer/
+mc mb test
+```
+
+Start an ecosystem with `pm2`
+
+```bash
+NODE_ENV=development pm2 start config/pm2/ecosystem.config.js
+```
 
 ## Vocabulary
 
@@ -127,22 +150,6 @@ external platform, such as a cluster, grid, or a cloud.
 - `Consul`: a distributed service mesh to connect, secure, and configure
   services across any runtime platform and public or private cloud
 
-## Usage
-
-Prepare the bucket:
-
-```bash
-mkdir -p /tmp/ocr-ms/moleculer/
-cd /tmp/ocr-ms/moleculer/
-mc mb test
-```
-
-Start an ecosystem with `pm2`
-
-```bash
-NODE_ENV=development pm2 start config/pm2/ecosystem.config.js
-```
-
 ## Project Structure
 
 ### Hierarchy
@@ -158,15 +165,6 @@ NODE_ENV=development pm2 start config/pm2/ecosystem.config.js
 
 #### Controller
 
-Entrypoint and router of client demands
-
-- api.createTask(stream, meta { task })
-- api.deleteTask(task)
-- api.statusTask(task)
-- api.resultTask(task)
-
-return { result: "success|failure", err: (null|err) }
-
 #### Worker
 
 #### Queuer
@@ -177,36 +175,57 @@ return { result: "success|failure", err: (null|err) }
 
 ### MVP 1.0 - Basics
 
-1. [ ] Micro-services architecture with worker, controller, queuer communicating
+1. [x] Micro-services architecture with worker, controller, queuer communicating
   with NATS.
-2. [ ] The system is built on a queue with specifications
-    - [ ] Prioritized
-    - [ ] In-memory logic control
-    - [ ] Stored information qnd status in database
-    - [ ] Possible reloading of the In-memory storage
-3. [ ] The controller manage the requests with:
-    - [ ] A task can be added to the queue for processing
-    - [ ] An existing task can be selected to check the status and the embedded information
-    - [ ] An existing task can be selected to return the result of the processing
-4. [ ] The worker processes the task with:
-    - [ ] A worker is able to pull, and process a simple task
-    - [ ] A worker is able to split a task in children tasks if necessary
+2. [x] The system is built on a queue with specifications
+    - [x] Prioritized
+    - [x] In-memory logic control
+    - [x] Stored information and status in database
+    - [x] Possible reloading of the in-memory storage
+3. [x] The controller manage the requests with:
+    - [x] A task can be added to the queue for processing
+    - [x] An existing task can be selected to check the status and the embedded information
+    - [x] An existing task can be selected to return the result of the processing
+4. [x] The worker processes the task with:
+    - [x] A worker is able to pull, and process a simple task
+    - [x] A worker is able to split a task in children tasks if necessary
     - [ ] A worker is able to merge a task if contains children that are completed
 
 ### MVP 1.1 - Job Stealing
 
-1. [ ] Steal jobs form another cluster
-2. [ ] Security with TLS certificates for the communication extra-sites.
+1. [x] Security with TLS certificates for the communication extra-sites.
+2. [ ] statistics component
+3. [ ] Steal jobs form another cluster
+4. [ ] multi-queue with priority and chained by authorization on plates.
 
 ### MVP 1.2 - API Interface
 
 1. [ ] Swagger specifications
+2. [ ] API layers and middleware
+    - [ ] Security and usage checking
+    - [ ] Swagger validation of requests
+    - [ ] Check Response validation
+    - [ ] Filter correctly possible errors
+    - [ ] finalize with monitoring component
+3. [ ] Billing with YMDHMS keys and dump into files for logstash?
+    - [ ] Design data structure
+4. [ ] Monitoring component, generate files for Logstash
+    - [ ] Design data structure
+    - [ ] Filebeat
+        - [ ] Configure for resend data in a recover mode
+    - [ ] Logstash
+    - [ ] Elasticsearch
+5. [ ] Grafana monitoring or any other tool using ElasticSearch
+
+### MVP 1.3 - Web
+
+1. [ ] Web
 
 ### Task model
 
 | Name              | Type                  | Description                      |
 |-------------------|:---------------------:|----------------------------------|
-|id                 |string                 |Identifier                        |
+|id                 |string                 |Identifier priority:site:id       |
 |user               |string                 |??                                |
 |name               |string                 |??                                |
 |status             |string                 |see status                        |
@@ -216,8 +235,8 @@ return { result: "success|failure", err: (null|err) }
 |submitTime         |string                 |Unix 13 digits                    |
 |startTime          |string                 |Unix 13 digits                    |
 |nextTime           |string                 |Deprecated                        |
-|duration           |long                   |in milliseconds                   |
-|process            |long                   |in milliseconds                   |
+|duration           |long                   |in milliseconds: elapse time beween first insert and task finished |
+|process            |long                   |in milliseconds: cumulative time of CPU processing |
 |tries              |string                 |number of previous fails          |
 |hostname           |string                 |                                  |
 |error              |string                 |message log                       |
@@ -226,17 +245,28 @@ return { result: "success|failure", err: (null|err) }
 |childrenCompleted  |long                   |if task is a parent               |
 |children           |object                 |object list with children ids     |
 
+### Task Billing model
 
-id : site#id
-name: customer task name
-input/output: s3 filename
-status: input|output|work|error|wait|complete
+| Name | Type | Description |
+id
+taskId
+status
+userId
+userType
+filename
 submitTime
-startTime
+fileSize
+nbPages
+billingEntity
 duration
+error
+startTime
 tries
-priority
-hostname: hostname on which worker did the job, this is not relevant for subtasks
+profile
+outputType
+cpuTime
+userTime
+processingTime
 
 status:
 
@@ -245,8 +275,6 @@ status:
 - work => input if task failed and tries < 10
 - work => error if task failed and tries >= 10
 - TODO: work => wait if task return children
-
-Entrypoint for external call is `api`.
 
 task.id => site#id
 

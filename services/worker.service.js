@@ -16,6 +16,8 @@ const SERVICE_NAME = "worker";
 let RUNNING = false;
 let EXITING = false;
 
+logger.level("debug");
+
 // Loading configuration
 const config = loadConfig(SERVICE_NAME)
 
@@ -37,6 +39,7 @@ const service = {
     methods: {
         success,
         failure,
+        terminate,
         work,
         run // Background job
     },
@@ -105,20 +108,47 @@ async function failure(task, error) {
 }
 
 /**
+ * Termination of the task before update
+ * 
+ * @param {object} task 
+ * @param {string} mode failure | simple | child | split | merge
+ * @param {Error} error 
+ */
+async function terminate(task, mode, error) {
+    let err;
+    if (error || mode == "failure") {
+        task.mode = "failure";
+        task.error = error.message || error.code || error;
+    } else {
+        task.mode = mode;
+    }
+    [err] = await to(this.broker.call("controller.updateTask", task));
+    if (err) { logger.error(err); }
+}
+
+/**
  * A full processing job
  */
 async function work(task) {
     let err = null;
+    let mode = null;
 
     // prepare parameters
     var json = {
         ...task
     }
 
+    if (task.parentId) {
+        mode = "child"
+    } else {
+        mode = "simple"
+    }
+
     // 1 - Get documents from S3 -----------------------------------------------
     if (!err) {
         // MERGE MODE 
         if (task.children) {
+            mode = "merge"
             logger.debug("MERGE MODE JS")
             var input;
             var tempName = uuid();
@@ -139,7 +169,7 @@ async function work(task) {
             }
 
         } else { // SPLIT MODE or NORMAL MODE
-            logger.debug("NORMAL MODE JS")
+            logger.debug("NORMAL MODE JS");
             var input;
             var tempName = uuid();
             
@@ -184,6 +214,7 @@ async function work(task) {
             logger.warn("WRITE S3 " + resultTask.output);
         } else {
             logger.info("SPLIT")
+            mode = "split";
             for (let child of resultTask.children) {
                 var filename = s3.newFilename();
                 child.input = `${filename}.in`;
@@ -231,14 +262,8 @@ async function work(task) {
 
     // 5 - Finalization of the task: failure | success -------------------------
     // return result async, so we can start next task asap
-    if (err) {
-        this.failure(task, err);
-        logger.warn("PB");
-        console.log(err)
-        logger.error(err);
-    } else {
-        this.success(task);
-    }
+    logger.warn(mode);
+    this.terminate(task, mode, err);
 }
 
 /**

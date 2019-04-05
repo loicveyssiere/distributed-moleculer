@@ -2,5 +2,8 @@ node_modules/
 data/
 *~
 .vscode
+doc
+logs
 start.conf
 all
+*.pem

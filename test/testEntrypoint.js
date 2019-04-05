@@ -2,8 +2,9 @@
 
 const assert = require('assert');
 const stream = require("stream");
-var sinon = require('sinon');
-var proxyquire = require('proxyquire');
+const sinon = require('sinon');
+const proxyquire = require('proxyquire');
+
 
 // Here we need to mock the submodule imports
 
@@ -11,9 +12,8 @@ const utils = require("../common/utils");
 
 sinon.stub(utils, 'pipeline').resolves();
 
-const db_nedb123 = require("../common/db_nedb");
-
-proxyquire("../common/datastore", {"../common/db_hbase": {test:"test"}}); // not working
+const db_nedb = require("../common/db_nedb");
+const DataStore = proxyquire("../common/datastore.js", {"../common/db_hbase": db_nedb});
 
 proxyquire("../services/worker.service.js", {"../common/utils": utils});
 
@@ -70,13 +70,8 @@ const cluster = {
     dealer: new Service(stealer.globalBroker)
 }
 
-const DataStore = require("../common/datastore");
 cluster.queuer.settings.datastore = new DataStore();
 var datastore = cluster.queuer.settings.datastore;
-
-before(function() {
-    // runs before all tests in this block
-  });
 
 describe('MVP 1.0', function() {
     it('should be able to create a task and see it in the queue and the storage', async function() {

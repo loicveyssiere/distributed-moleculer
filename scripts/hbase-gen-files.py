@@ -1,4 +1,5 @@
 import os
+import datetime
 
 # INFORMATION
 #
@@ -28,6 +29,29 @@ def generate(n):
     output += "exit\n"
     return output
 
+def billing():
+    now = datetime.datetime.now()
+    now2d = datetime.datetime.now() - datetime.timedelta(days=1)
+    now10d = datetime.datetime.now() - datetime.timedelta(days=10)
+    output = ""
+    output += "disable 'taskBilling'\n"
+    output += "drop 'taskBilling'\n"
+    output += "create 'taskBilling', 'data'\n"
+    for i in range(30):
+        output += "put 'taskBilling', '{}{}{}', 'data:nbPages', '{}'\n".format(datetime.datetime.now().isoformat(), "#AA",str(i), str(i))
+    output += "put 'taskBilling', '{}{}', 'data:nbPages', '{}'\n".format(now.isoformat(), "#AA", "10")
+    output += "put 'taskBilling', '{}{}', 'data:nbPages', '{}'\n".format(now.isoformat(), "#AB", "1")
+    output += "put 'taskBilling', '{}{}', 'data:nbPages', '{}'\n".format(now.isoformat(), "#AC", "2")
+    output += "put 'taskBilling', '{}{}', 'data:nbPages', '{}'\n".format(now2d.isoformat(), "#BA", "10")
+    output += "put 'taskBilling', '{}{}', 'data:nbPages', '{}'\n".format(now2d.isoformat(), "#BB", "10")
+    output += "put 'taskBilling', '{}{}', 'data:nbPages', '{}'\n".format(now2d.isoformat(), "#BC", "10")
+    output += "put 'taskBilling', '{}{}', 'data:nbPages', '{}'\n".format(now10d.isoformat(), "#CA", "10")
+    output += "put 'taskBilling', '{}{}', 'data:nbPages', '{}'\n".format(now10d.isoformat(), "#CB", "10")
+    output += "put 'taskBilling', '{}{}', 'data:nbPages', '{}'\n".format(now10d.isoformat(), "#CC", "10")
+    output += "scan 'taskBilling'\n"
+    output += "exit\n"
+    return output
+
 if __name__ == "__main__":
 
     with open(path + "/clear.hbase", 'w') as f:
@@ -35,3 +59,6 @@ if __name__ == "__main__":
 
     with open(path + "/generate.hbase", 'w') as f:
         f.write(generate(n))
+
+    with open(path + "/billing.hbase", 'w') as f:
+        f.write(billing())

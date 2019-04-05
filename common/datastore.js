@@ -4,7 +4,6 @@ const nedb = require("nedb-promises");
 const { to, logger } = require("./utils");
 const { PriorityCache } = require("./structures");
 const db = require("./db_hbase");
-console.log(db);
 
 stats = { input: 0, work: 0, output: 0, error: 0, total: 0 };
 
@@ -35,9 +34,9 @@ class DataStore {
             priority: item.priority | 0,
             input: item.input,
             output: item.output,
-            submitTime: new Date(),
+            submitTime: Date.now(),
             startTime: null,
-            nextTime: new Date(0),
+            nextTime: Date.now(),
             duration: 0,
             process: 0,
             tries: 0,
@@ -106,22 +105,22 @@ class DataStore {
 
             if (err) { logger.error(err); return null; }
             if (!task) return null;
-            if (task.status == "input") {
+            if (task.status === "input") {
                 [err, task] = await to(this.db.update(id, {
                     check: {status: "input"},
                     set: {
                         status: "work",
-                        startTime: new Date()
+                        startTime: Date.now()
                     },
                     increment: null,
                     returnTask: true
                 }));
-            } else if (task.status == "complete") {
+            } else if (task.status === "complete") {
                 [err, task] = await to(this.db.update(id, {
                     check: {status: "complete"},
                     set: {
                         status: "work",
-                        startTime: new Date()
+                        startTime: Date.now()
                     },
                     increment: null,
                     returnTask: true
@@ -143,176 +142,36 @@ class DataStore {
         return task;
     }
 
-    async new_save(item) {
-
-        // NORMAL - no child, no parent
-
-        // IS CHILD
-
-        // IS PARENT
-    }
-
-    async save(item) {
-        logger.warn("SAVE")
-        let err, task, parentTask;
-        [err, task] = await to(this.db.get(item._id));
-        if (err) { logger.error(err); throw err; }
-        if (!task) return;
-        //
-        // if status = work
-        //   if children, status => wait, create children
-        //   else status = output, update parent
-        // if status = complete
-        //   status => output
-        //   delete children
-        if (task.status === "work") {
-            if (item.children) {
-                logger.warn("BRANCH 1")
-                // status => wait
-                [err, task] = await to(this.db.update(task._id, {
-                    check: null,
-                    set: {
-                        status: "wait",
-                        process: new Date() - task.startTime,
-                        nextTime: null,
-                        error: null,
-                        hostname: item.hostname,
-                        childrenCompleted: 0,
-                        childrenTotal: item.children.length,
-                        children: item.children
-                    },
-                    increment: null,
-                    returnTask: true
-                }));  
-                logger.info("success:", task);
-                logger.warn("WAIT");
-
-                // Insert the children
-                for (let child of item.children) {
-                    child.user = item.user;
-                    child.name = item.name;
-                    child.priority = item.priority;
-                    try {
-                        await this.insert(child, item._id); // TODO: check correctness
-                    } catch(e) {
-                        console.error("ERROR CATCH")
-                        console.log(e);
-                    }
-                }
-            } else {
-                logger.warn("BRANCH 2")
-                // status => output
-                [err, task] = await to(this.db.update(task._id, {
-                    check: null,
-                    set: {
-                        status: "output",
-                        duration: new Date() - task.submitTime,
-                        process: new Date() - task.startTime,
-                        nextTime: null,
-                        error: null,
-                        hostname: item.hostname
-                    },
-                    increment: null,
-                    returnTask: true
-                }));  
-    
-                if (err) { logger.error(err); throw err; }
-                //
-                stats.work--;
-                stats.output++;
-                // parent.completed++ and eventually parent.status => complete
-                if (task.parentId) {
-                    logger.warn("BRANCH 3")
-                    let parentTask;
-                    [err, parentTask] = await to(this.db.update(task.parentId, {
-                        check: {status: "wait"},
-                        set: {status: "wait"},
-                        increment: {
-                            process: task.duration, // TODO: check what expected
-                            childrenCompleted: 1,
-                        },
-                        returnTask: true
-                    }));
-                    if (err) { logger.error(err); throw err; }
-                    [err, parentTask] = await to(this.db.get(task.parentId));
-                    if (err) { logger.error(err); throw err; }
-                    // here a need to get the full structure
-                    logger.warn("STEP")
-                    logger.warn(JSON.stringify(parentTask, null, 4))
-                    if (parentTask.childrenCompleted === parentTask.childrenTotal) {
-                        logger.warn("BRANCH 4")
-                        [err, parentTask] = await to(this.db.update(task.parentId, {
-                            check: {status: "wait"},
-                            set: {status: "complete"},
-                            increment: null,
-                            returnTask: true
-                        })); 
-                        if (err) { logger.error(err); throw err; }
-                        // Add parent to list
-                        logger.warn("ADD PARENT")
-                        this.cache.push(parentTask._id, parentTask.priority);
-                    }
-                }
-            }
-        }
-        if (task.status === "complete") {
-            // status => output
-            logger.warn("BRANCH 5")
-            [err, task] = await to(this.db.update(task._id, {
-                check: null,
-                set: {
-                    status: "output",
-                    duration: new Date() - task.submitTime,
-                    nextTime: null,
-                    error: null,
-                    hostname: item.hostname
-                },
-                increment: {
-                    process: new Date() - item.startTime // TODO: check if useful here, no problem of concurrency
-                },
-                returnTask: true
-            }));           
-            if (err) { logger.error(err); throw err; }
-            //
-            stats.work--;
-            stats.output++;
-            // remove all children
-            // TODO
-        }
-        logger.warn("END BRANCH")
-        //
-        return;
-    }
-
-    async undo(item) {
-        let err, task;
-        [err, task] = await to(this.db.get(item._id));
+    async save_on_failure(inputTask) {
+        let wakeup, err, task;
+        [err, task] = await to(this.db.get(inputTask._id));
         if (err) { logger.error(err); throw err; }
         if (!task) return;
         //
         if (task.tries < 10) {
             task.status = task.childrenTotal > 0 ? "complete" : "input";
+            wakeup = true;
             task.tries++;
         } else {
             task.status = "error";
+            wakeup = false;
         }
         //
-        [err, task] = await to(this.db.update(task._id, {
+        [err] = await to(this.db.update(task._id, {
             check: null,
             set: {
                 status: task.status,
                 tries: task.tries,
                 nextTime: shift(5000),
-                error: item.error,
-                hostname: item.hostname
+                error: task.error,
+                hostname: task.hostname
             },
             increment: null,
-            returnTask: true
+            returnTask: false
         }));      
         if (err) { logger.error(err); throw err; }
         //
         if (task.status === "input") {
-            //this.updatePriorities(task, 1);
             this.cache.push(task._id, task.priority);
             stats.input++;
         } else {
@@ -320,7 +179,149 @@ class DataStore {
         }
         stats.work--;
         //
-        return;
+        return wakeup;
+    }
+
+    /**
+     * input => output
+     */
+    async save_on_simple(inputTask) {
+        logger.debug("save_on_simple");
+        let err;
+        let wakeup = false;
+        [err] = await to(this.db.update(inputTask._id, {
+            check: null,
+            set: {
+                status: "output",
+                duration: Date.now() - inputTask.submitTime,
+                process: Date.now() - inputTask.startTime,
+                nextTime: null,
+                error: null,
+                hostname: inputTask.hostname
+            },
+            increment: null,
+            returnTask: false
+        }));  
+
+        if (err) { logger.error(err); throw err; }
+        //
+        stats.work--;
+        stats.output++;
+        return wakeup;
+    }
+
+    /**
+     * input => output + update parent
+     */
+    async save_on_child(inputTask) {
+        logger.debug("save_on_child");
+        let wakeup = false;
+        let task, parentTask, err;
+        // Update the task
+        [err, task] = await to(this.db.update(inputTask._id, {
+            check: null,
+            set: {
+                status: "output",
+                duration: Date.now() - inputTask.submitTime,
+                process: Date.now() - inputTask.startTime,
+                nextTime: null,
+                error: null,
+                hostname: inputTask.hostname
+            },
+            increment: null,
+            returnTask: true
+        }));
+        if (err) { logger.error(err); throw err; }
+
+        // Update the parent
+        [err, parentTask] = await to(this.db.update(inputTask.parentId, {
+            check: {status: "wait"},
+            set: {status: "wait"},
+            increment: {
+                process: task.process, // TODO: check what expected
+                childrenCompleted: 1,
+            },
+            returnTask: true
+        }));
+        if (err) { logger.error(err); throw err; }
+
+        // Eventually update the parent status
+        if (parentTask.childrenCompleted === parentTask.childrenTotal) {
+            [err, parentTask] = await to(this.db.update(inputTask.parentId, {
+                check: {status: "wait"},
+                set: {status: "complete"},
+                increment: null,
+                returnTask: true
+            })); 
+            if (err) { logger.error(err); throw err; }
+            
+            // Add parent to list
+            this.cache.push(parentTask._id, parentTask.priority);
+            wakeup = true;
+        }
+        return wakeup;
+    }
+
+    /**
+     * input => wait
+     */
+    async save_on_split(inputTask) {
+        logger.debug("save_on_split");
+        let err;
+        let wakeup = true;
+
+        [err] = await to(this.db.update(inputTask._id, {
+            check: null,
+            set: {
+                status: "wait",
+                process: Date.now() - inputTask.startTime,
+                nextTime: null,
+                error: null,
+                hostname: inputTask.hostname,
+                childrenCompleted: 0,
+                childrenTotal: inputTask.children.length,
+                children: inputTask.children
+            },
+            increment: null,
+            returnTask: false
+        }));  
+        logger.info("success:", inputTask);
+
+        // Insert the children
+        for (let child of inputTask.children) {
+            child.user = inputTask.user;
+            child.name = inputTask.name;
+            child.priority = inputTask.priority;
+            try {
+                await this.insert(child, inputTask._id); // TODO: check correctness
+            } catch(e) {
+                console.log(e);
+            }
+        }
+        return wakeup;
+    }
+
+    async save_on_merge(inputTask) {
+        logger.debug("save_on_merge");
+        let err;
+        let wakeup = false;
+        [err] = await to(this.db.update(inputTask._id, {
+            check: null,
+            set: {
+                status: "output",
+                duration: Date.now() - inputTask.submitTime,
+                nextTime: null,
+                error: null,
+                hostname: inputTask.hostname
+            },
+            increment: {
+                process: Date.now() - inputTask.startTime,
+            },
+            returnTask: false
+        }));
+
+        if (err) { logger.error(err); throw err; }
+        return wakeup;
     }
 
     /**
