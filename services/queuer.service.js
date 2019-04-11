@@ -205,18 +205,31 @@ async function pullTask() {
  * @param {object} ctx.params Task with field: id(string) TODO: check all fields
  */
 async function updateTask(ctx) {
-    let err, task;
+    let err, task, wakeup;
     task = ctx.params;
     logger.info("update:", task);
     //
     task = fromid(task);
     //
-    if (task.result === "success") {
-        [err] = await to(this.settings.datastore.save(task));
-        if (err) { logger.error(err); throw err; }
+    logger.info(task.mode);
+    if (task.mode === "failure") {
+        [err, wakeup] = await to(this.settings.datastore.save_on_failure(task));
+    } else if (task.mode === "simple") {
+        [err, wakeup] = await to(this.settings.datastore.save_on_simple(task));
+    } else if (task.mode === "child") {
+        [err, wakeup] = await to(this.settings.datastore.save_on_child(task));
+    } else if (task.mode === "split") {
+        [err, wakeup] = await to(this.settings.datastore.save_on_split(task));
+    } else if (task.mode === "merge") {
+        [err, wakeup] = await to(this.settings.datastore.save_on_merge(task));
     } else {
-        [err] = await to(this.settings.datastore.undo(task));
-        if (err) { logger.error(err); throw err; }
+        err = `${task.mode} task result not supported in updateTask`;
+    }
+
+    if (err) { logger.error(err); throw err; }
+
+    if (wakeup) {
+        this.broker.broadcast("worker.wakeup");
     }
     //
     logger.info("updated: " + task.name +  task._id);

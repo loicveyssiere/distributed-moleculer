@@ -13,6 +13,20 @@ const common = {
 
 const api = {
     nodeID: "api",
+    port: 8081,
+    swaggerPath: "./doc/OCRServiceAPI.yml",
+    loggerOptions: {
+        frequency: "12h",
+        datePattern: "YYYY-MM-DD:HH",
+        zippedArchive: false,
+        filename: "ocr.api.%DATE%",
+        dirname: "./logs/api/",
+        stream: null,
+        maxSize: "10m",
+        maxFiles: "2d",
+        //options: {flags: 'a'},
+        //auditFile: '..json'
+    }
 };
 
 const controller = {
