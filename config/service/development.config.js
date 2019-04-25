@@ -13,18 +13,33 @@ const common = {
 
 const api = {
     nodeID: "api",
-    port: 8081,
+    port: 443,
     swaggerPath: "./doc/OCRServiceAPI.yml",
+    swaggerUiOptions: {
+        explorer: false
+    },
+    cacheOptions: {
+        stdTTL: 10,
+        checkperiod: 120,
+        useClones: true,
+        errorOnMissing: true,
+        deleteOnExpire: false
+    },
+    httpsOptions: {
+        keyPath: "./tmp/api/server-key.pem",
+        certPath: "./tmp/api/server-cert.pem",
+        caPath: "./tmp/api/ca.pem"
+    },
     loggerOptions: {
-        frequency: "12h",
+        frequency: "1h",
         datePattern: "YYYY-MM-DD:HH",
         zippedArchive: false,
         filename: "ocr.api.%DATE%",
-        dirname: "./logs/api/",
+        dirname: "./tmp/logs/api/",
         stream: null,
         maxSize: "10m",
-        maxFiles: "2d",
-        //options: {flags: 'a'},
+        maxFiles: "12h",
+        //options: {flags: 'onv_ocr_api'},
         //auditFile: '..json'
     }
 };
@@ -34,7 +49,7 @@ const controller = {
 };
 
 const worker = {
-    exec: "./scripts-job/do.py",
+    exec: "./scripts/do.py",
     restartInterval: 5000,
     exitWaitTime: 5000,
     nodeID: "worker",
@@ -59,7 +74,7 @@ const global = {
 };
 
 const s3 = {
-    bucket: "test",
+    bucket: "bucket",
     endPoint: "localhost",
     port: 9000,
     useSSL: false,

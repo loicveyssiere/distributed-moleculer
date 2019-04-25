@@ -62,15 +62,16 @@ if (!module.parent) {
  * needs the only param of ctx and other information goes to meta. 
  * @param {object} ctx Moleculer context, see the structure below
  * @param {object} ctx.params Stream of the document to process
- * @param {object} ctx.meta Task with fields: name(string), id(string), priority(int)
+ * @param {object} ctx.meta Task with fields: priority(int), profile(string),
+ * userType(string), userId(string), fileName(string), outputType(string)
  * @return {Task} A full Task object as described in the database 
  */
-async function createTask(ctx) { //user,name,priority?
+async function createTask(ctx) {
     let err, task, stream;
     task = ctx.meta;
     stream = ctx.params;
     [err, task] = await to(this.broker.call("queuer.createTask", stream, { meta: task }));
-    if (err) { logger.error(err); throw err; } //TODO return xxx if failed
+    if (err) { logger.error(err); throw err; }
     return task;
 }
 
@@ -81,11 +82,11 @@ async function createTask(ctx) { //user,name,priority?
  * @param {object} ctx.params Task with field: id(string)
  * @return {Task} A full Task object as described in the database 
  */
-async function deleteTask(ctx) { //user,id
+async function deleteTask(ctx) {
     let err, task;
     task = ctx.params;
     [err, task] = await to(this.broker.call(`${store(task)}.deleteTask`, task));
-    if (err) { logger.error(err); throw err; } //TODO return xxx if failed
+    if (err) { logger.error(err); throw err; }
     return task;
 }
 
@@ -101,7 +102,7 @@ async function statusTask(ctx) {
     let err, task;
     task = ctx.params;
     [err, task] = await to(this.broker.call(`${store(task)}.statusTask`, task));
-    if (err) { logger.error(err); throw err; } //TODO: define return with 'missing' if not exists ?
+    if (err) { logger.error(err); throw err; }
     return task;
 }
 
@@ -111,11 +112,11 @@ async function statusTask(ctx) {
  * @return {Stream} Stream of the processed (result) document  
  */
 async function resultTask(ctx) {
-    let err, task;
+    let err, task, doc_stream;
     task = ctx.params;
-    [err, task] = await to(this.broker.call(`${store(task)}.resultTask`, task));
+    [err, doc_stream] = await to(this.broker.call(`${store(task)}.resultTask`, task));
     if (err) { logger.error(err); throw err; } //TODO define return 404 if not exist 
-    return stream;
+    return doc_stream;
 }
 
 /**
@@ -129,13 +130,12 @@ async function pullTask() {
     [err, task] = await to(this.broker.call("queuer.pullTask"));
     if (err) { logger.error(err); }
     if (!err && task != null) {
-        logger.debug("pull local:", task);
         return task;
     }
     [err, task] = await to(this.broker.call("stealer.pullTask"));
     if (err) { logger.debug(err); }
     if (!err && task != null) {
-        logger.debug("pull remote:", task);
+        logger.info(`stealer pulling the task ${task.id}`);
         return task;
     }
     return null;
@@ -148,15 +148,9 @@ async function pullTask() {
  * @param {object} ctx.params Task with field: id(string) TODO: check all fields
  * TODO: Should return the updateTask??
  */
-async function updateTask(ctx) { //user,id,...
+async function updateTask(ctx) {
     let err;
     const task = ctx.params;
-    if (task.result === "success") {
-        logger.info("update:", task);
-    } else {
-        logger.warn("update:", task);
-    }
-    //
     [err] = await to(this.broker.call(`${store(task)}.updateTask`, task));
     if (err) { logger.error(err); throw err; }
 }
@@ -166,7 +160,7 @@ async function updateTask(ctx) { //user,id,...
 ----------------------------------------------------------------------------- */
 
 // Helpers
-let store = task => { var site = task.id.split(":")[0]; return site === broker.options.site ? "queuer" : "stealer"; }
+let store = task => { var site = task.site; return (!site) || (site === broker.options.site) ? "queuer" : "stealer"; }
 
 
 

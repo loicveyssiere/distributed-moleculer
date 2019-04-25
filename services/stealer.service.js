@@ -3,6 +3,7 @@
 global.APP_ROOT_DIR = global.APP_ROOT_DIR || __dirname;
 
 const { ServiceBroker } = require("moleculer");
+const s3 = require(global.APP_ROOT_DIR + "/../common/s3");
 const { loadConfig, death, nodeid, exit, uuid, to, logger } = require(global.APP_ROOT_DIR + "/../common/utils");
 
 // Constants
@@ -93,7 +94,7 @@ async function pullTask() {
         if (task == null) { return null; }
         [err, input] = await to(this.settings.globalBroker.call(actionInput, task));
         if (err) { logger.error(err); return null; }
-        [err] = await to(s3.writeFile(input, task.input))
+        [err] = await to(s3.writeFile(input, task.inputPath))
         if (err) { logger.error(err); return null; }
         logger.debug("remoteTask:", task);
         return task;
@@ -104,12 +105,11 @@ async function pullTask() {
 async function updateTask(ctx) {
     let err;
     const task = ctx.params;
-    logger.info("updateTask:", task);
     const site = task.id.split(":")[0];
     const action = `global-${site}.updateTask`;
     let output;
     if (task.result === "success") {
-        [err, output] = await to(s3.readFile(task.output));
+        [err, output] = await to(s3.readFile(task.outputPath));
         if (err) {
             logger.error(err);
             task.result = "failure";
@@ -117,8 +117,8 @@ async function updateTask(ctx) {
     }
     [err] = await to(this.settings.globalBroker.call(action, output, { meta: task }));
     if (err) { logger.error(err); }
-    s3.deleteFile(task.input);
-    s3.deleteFile(task.output);
+    s3.deleteFile(task.inputPath);
+    s3.deleteFile(task.outputPath);
 }
 
 async function shareLog(ctx) {
@@ -148,7 +148,7 @@ async function global_updateTask(ctx) {
     const task = ctx.meta;
     logger.debug("updateTask:", task);
     if (task.result === "success") {
-        [err] = await to(s3.writeFile(ctx.params, ctx.meta.output));
+        [err] = await to(s3.writeFile(ctx.params, ctx.meta.outputPath));
         if (err) {
             logger.error(err);
             task.result = "failure";

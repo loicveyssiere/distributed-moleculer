@@ -4,6 +4,7 @@ data/
 .vscode
 doc
 logs
+tmp
 start.conf
 all
 *.pem

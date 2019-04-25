@@ -3,7 +3,7 @@
 const assert = require('assert');
 const stream = require("stream");
 var sinon = require('sinon');
-var { service, broker, startup } = require("../services/controller.service.js");
+var { service, broker, startup } = require("../../services/controller.service.js");
 
 describe('Controller', function() {
     it('createTask should proxy the queuer using the same parameters', function() {

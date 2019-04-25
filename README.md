@@ -7,22 +7,23 @@ document processing. The heterogeneity of the task to be processed imposes a
 
 ## TODO
 
-- [ ] Inspect structure, FIFO seems weird with priority (tests)
 - [ ] Bug, the cache structure set isEmpty to true whereas the cache is not empty
 - [ ] Bug critical, when the job script fails, the worker seems to exit its main loop
-- [ ] Minio load testing (read and write volume charge for documents)
 - [ ] Bug, when hbase emits an error, we should restart the service
-- [ ] define and document API that strike the system
-- [ ] API: Authentication
 - [ ] API: Authorization with quotas
-- [ ] API: Swagger validation of the response
-- [ ] API: Log usage for monitoring
+- [ ] api-key with quotas, offloading access and priority
+- [ ] add authentication information in log usage monitoring
+- [ ] Job-stealing with children: careful treatment to do (increment parent)
+- [ ] Minio load testing (read and write volume charge for documents)
+- [ ] Minio configuration
+- [ ] job stealing stats + correctness + working in standalone
+- [ ] HTTPS on api server
 
 ## Backlogs
 
+- [ ] Inspect for variable to put in the configuration (zookeeper conf for example)
+- [ ] Inspect structure, FIFO seems weird with priority (tests)
 - [ ] Enable a working library without the stealer
-- [ ] rest interface
-- [ ] implementation of the API (`high level` -> running doc, my docs, processed doc ... `low level` -> createTask, statusTask ...)
 - [ ] Big topic on stats to enhanced for job stealing.
 - [ ] Add a processedBy field to do stats on offloading
 - [ ] Add stat outputs in test to show offloading results
@@ -30,17 +31,43 @@ document processing. The heterogeneity of the task to be processed imposes a
 - [ ] In relation with statistic, design graphics, metrics info, to link with some API calls?
 - [ ] In relation with statistic, how to get the running, working, completed jobs? my docs ... problem of offloading (scanning is impossible) and perhaps offloading needs to be reported to the queuer?
 - [ ] In relation with statistic, define and implement a billing database system
-- [ ] api-key with quotas, offloading access and priority
 - [ ] Consider to pre-load the task env, start JVM?, pre-start the script?
 - [ ] Define interface for script (worker), requirements, postulate etc ...
 - [ ] Re-implementation of stealer with job stealing cleaner
 - [ ] Design and implement plate policies for job stealing
-- [ ] keep in mind that the configuration system is able to override an existing config
-- [ ] Make a (very) great schema of the full architecture with Visio
 - [ ] Implementation of Plate offloading with multi-queues
+- [ ] Make a (very) great schema of the full architecture with Visio
 
 ## Done
 
+- [x] Bug correction in reloading (use done function)
+- [x] Scanner get instances and remove singleton
+- [x] Cache create a real singleton class
+- [x] Correction of swagger UI to use Basic authentication + WWW-auth header
+- [x] Integration of swagger UI 
+- [x] Clean children at the save of the parent
+- [x] rest implementation of get by type
+- [x] In the implementation of delete, multiple call of get methods (to clean)
+- [x] API: Authentication
+- [x] no task in db should not return error at the API level
+- [x] rest API implementation
+- [x] use cache to check user information
+- [x] keep in mind that the configuration system is able to override an existing config
+- [x] reimplement db_hbase to be generic (including scanning using first key and last key)
+- [x] Where is the hostname field in the database?
+- [x] Refactoring to use new data structures and pheonix
+- [x] remove multiple table for multiple priority
+- [x] use real billing data structure
+- [x] refacto code to use uppercases on status and table field and table name
+- [x] API: Log usage for monitoring
+- [x] Add task to billing storage
+- [x] API: Swagger validation of the response
+- [x] define and document API that strike the system, reuse the same one
+- [x] Enable data structure creation using Phoenix 
+- [x] Get the previous data structures
+- [x] PoC of the api metrics ingested by logstash
+- [x] PoC fo the billing hbase scanner to logstash ingestion
+- [x] Install the elastic stack
 - [x] API: Swagger validation of the request
 - [x] Add a wakeup if task generate child or complete a task
 - [x] Simplification of the `save` function of datastore
@@ -132,12 +159,12 @@ external platform, such as a cluster, grid, or a cloud.
 
 ### Status
 
-- `input`: The task is only created
-- `output`: The task is finished and processed
-- `work`: A resource is allocated to compute the task
-- `error`: The task raised an error in its last trial
-- `wait`: A parent task that is waiting for its children
-- `complete`: A parent task where all subtasks are finished (output) and is ready for processing (merge all children)
+- `INPUT`: The task is only created
+- `OUTPUT`: The task is finished and processed
+- `WORK`: A resource is allocated to compute the task
+- `ERROR`: The task raised an error in its last trial
+- `WAIT`: A parent task that is waiting for its children
+- `COMPLETE`: A parent task where all subtasks are finished (output) and is ready for processing (merge all children)
 
 ### Technical stack
 
@@ -221,60 +248,15 @@ external platform, such as a cluster, grid, or a cloud.
 
 1. [ ] Web
 
-### Task model
-
-| Name              | Type                  | Description                      |
-|-------------------|:---------------------:|----------------------------------|
-|id                 |string                 |Identifier priority:site:id       |
-|user               |string                 |??                                |
-|name               |string                 |??                                |
-|status             |string                 |see status                        |
-|priority           |long                   |0 for very low, 100 for the most important|
-|input              |string                 |input file name                   |
-|output             |string                 |output file name                  |
-|submitTime         |string                 |Unix 13 digits                    |
-|startTime          |string                 |Unix 13 digits                    |
-|nextTime           |string                 |Deprecated                        |
-|duration           |long                   |in milliseconds: elapse time beween first insert and task finished |
-|process            |long                   |in milliseconds: cumulative time of CPU processing |
-|tries              |string                 |number of previous fails          |
-|hostname           |string                 |                                  |
-|error              |string                 |message log                       |
-|parentId           |string                 |if any                            |
-|childrenTotal      |long                   |if task is a parent               |
-|childrenCompleted  |long                   |if task is a parent               |
-|children           |object                 |object list with children ids     |
-
-### Task Billing model
-
-| Name | Type | Description |
-id
-taskId
-status
-userId
-userType
-filename
-submitTime
-fileSize
-nbPages
-billingEntity
-duration
-error
-startTime
-tries
-profile
-outputType
-cpuTime
-userTime
-processingTime
-
-status:
+### Workflows
 
 - input => work
 - work => output if task success
 - work => input if task failed and tries < 10
 - work => error if task failed and tries >= 10
-- TODO: work => wait if task return children
+- work => wait if task return children
+- wait => complete if last child is finished
+- complete => work
 
 task.id => site#id
 

@@ -16,8 +16,6 @@ const SERVICE_NAME = "worker";
 let RUNNING = false;
 let EXITING = false;
 
-logger.level("debug");
-
 // Loading configuration
 const config = loadConfig(SERVICE_NAME)
 
@@ -37,8 +35,6 @@ const service = {
         }
     },
     methods: {
-        success,
-        failure,
         terminate,
         work,
         run // Background job
@@ -81,31 +77,6 @@ if (!module.parent) {
 /* -----------------------------------------------------------------------------
     PRIVATE
 ----------------------------------------------------------------------------- */
-/**
- * Termination of a single job in case of no error
- */
-async function success(task) {
-    let err;
-    task.result = "success";
-    task.hostname = shortname();
-    //logger.info("success:", task);
-    [err] = await to(this.broker.call("controller.updateTask", task));
-    if (err) { logger.error(err); }
-    return;
-}
-
-/**
- * Termination of a single job in case of errors
- */
-async function failure(task, error) {
-    let err;
-    task.result = "failure";
-    task.hostname = shortname();
-    task.error = error.message || error.code || error;
-    logger.info("failure:", task);
-    [err] = await to(this.broker.call("controller.updateTask", task));
-    if (err) { logger.error(err); }
-}
 
 /**
  * Termination of the task before update
@@ -118,7 +89,7 @@ async function terminate(task, mode, error) {
     let err;
     if (error || mode == "failure") {
         task.mode = "failure";
-        task.error = error.message || error.code || error;
+        task.errorMessage = error.message || error.code || error;
     } else {
         task.mode = mode;
     }
@@ -147,20 +118,22 @@ async function work(task) {
     // 1 - Get documents from S3 -----------------------------------------------
     if (!err) {
         // MERGE MODE 
-        if (task.children) {
+        if (task.childrenArray) {
             mode = "merge"
             logger.debug("MERGE MODE JS")
             var input;
             var tempName = uuid();
-            json.children = task.children;
             
-            for (let [index, child] of json.children.entries()) {
+            // Make a clone of childrenArray
+            json.childrenArray = JSON.parse(JSON.stringify(task.childrenArray));
+            
+            for (let [index, child] of json.childrenArray.entries()) {
 
                 child.tempInput = `/tmp/${tempName}.${index}.part.in`;
 
                 // get stream from s3
-                [err, input] = await to(s3.readFile(child.output));
-                logger.warn("READ S3 " + child.output);
+                [err, input] = await to(s3.readFile(child.outputPath));
+                logger.warn("READ S3 " + child.outputPath);
 
                 if (!err) {
                     [err] = await to(pipeline(input, fs.createWriteStream(child.tempInput)));
@@ -176,8 +149,8 @@ async function work(task) {
             json.tempInput = `/tmp/${tempName}.in`;
 
             // get stream from s3
-            [err, input] = await to(s3.readFile(json.input));
-            logger.warn("READ S3 " + json.input);
+            [err, input] = await to(s3.readFile(json.inputPath));
+            logger.warn("READ S3 " + json.inputPath);
     
             // save stream to tempInput
             if (!err) {
@@ -199,8 +172,6 @@ async function work(task) {
             logger.info("stderr: " + outputs.stderr)
             
             var resultTask = outputs && outputs.stdout && JSON.parse(outputs.stdout);
-            logger.info(JSON.stringify(resultTask))
-
         } catch (e) {
             err = e;
         }
@@ -210,17 +181,17 @@ async function work(task) {
     if (!err) {
         if (resultTask.tempOutput) { // MERGE OR NORMAL MODE
             logger.info("MERGE OR NORMAL")
-            [err] = await to(s3.writeFile(fs.createReadStream(resultTask.tempOutput), resultTask.output));
-            logger.warn("WRITE S3 " + resultTask.output);
+            [err] = await to(s3.writeFile(fs.createReadStream(resultTask.tempOutput), resultTask.outputPath));
+            logger.warn("WRITE S3 " + resultTask.outputPath);
         } else {
             logger.info("SPLIT")
             mode = "split";
-            for (let child of resultTask.children) {
+            for (let child of resultTask.childrenArray) {
                 var filename = s3.newFilename();
-                child.input = `${filename}.in`;
-                child.output = `${filename}.out`;
-                [err] = await to(s3.writeFile(fs.createReadStream(child.tempOutput), child.input));
-                logger.warn("WRITE S3 " + child.input);
+                child.inputPath = `${filename}.in`;
+                child.outputPath = `${filename}.out`;
+                [err] = await to(s3.writeFile(fs.createReadStream(child.tempOutput), child.inputPath));
+                logger.warn("WRITE S3 " + child.inputPath);
             }
         }
     }
@@ -233,7 +204,7 @@ async function work(task) {
         if (resultTask.tempOutput) {
             fs.unlink(resultTask.tempOutput, () => { });
         }
-        for (let child in json.children) {
+        for (let child in json.childrenArray) {
             if (child.tempInput) {
                 fs.unlink(child.tempInput, () => { });
             }
@@ -242,21 +213,14 @@ async function work(task) {
             }
         }
 
-        if (!task.children && resultTask.children) {
-            task.children = [];
-            for (let child of resultTask.children) {
-                task.children.push({
-                    input: child.input,
-                    output: child.output
+        if (!task.childrenArray && resultTask.childrenArray) {
+            task.childrenArray = [];
+            for (let child of resultTask.childrenArray) {
+                task.childrenArray.push({
+                    inputPath: child.inputPath,
+                    outputPath: child.outputPath
                 });
             }
-        } else if (task.children && resultTask.children) {
-            for (let child in resultTask.children) {
-                if (child.output) {
-                    [err] = await to(s3.deleteFile(child.output));
-                }
-                delete task.children; // FIXME: we should do better
-            }  
         }
     }
 
@@ -290,9 +254,6 @@ async function run() {
             logger.debug("run loop stopped");
             return;
         }
-
-        // if task found, process it
-        logger.info("task:", task);
 
         // Do the job, here await the job to finish
         await this.work(task);  
