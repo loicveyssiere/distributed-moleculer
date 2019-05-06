@@ -8,22 +8,25 @@ const proxyquire = require('proxyquire');
 
 // Here we need to mock the submodule imports
 
-const utils = require("../common/utils");
+const projectPath = "../../"
+console.log(__dirname)
+
+const utils = require(projectPath + "common/utils");
 
 sinon.stub(utils, 'pipeline').resolves();
 
-const db_nedb = require("../common/db_nedb");
-const DataStore = proxyquire("../common/datastore.js", {"../common/db_hbase": db_nedb});
+const db_nedb = require(projectPath + "common/db_nedb");
+const DataStore = proxyquire(projectPath + "common/datastore.js", {"../common/db_hbase": db_nedb});
 
-proxyquire("../services/worker.service.js", {"../common/utils": utils});
+proxyquire(projectPath + "services/worker.service.js", {"../common/utils": utils});
 
-const controller = require("../services/controller.service.js");
-const worker = require("../services/worker.service.js");
-const queuer = require("../services/queuer.service.js");
-const stealer = require("../services/stealer.service.js");
+const controller = require(projectPath + "services/controller.service.js");
+const worker = require(projectPath + "services/worker.service.js");
+const queuer = require(projectPath + "services/queuer.service.js");
+const stealer = require(projectPath + "services/stealer.service.js");
 
-const s3 = require("../common/s3");
-const { to, logger } = require("../common/utils");
+const s3 = require(projectPath + "common/s3");
+const { to, logger } = require(projectPath + "common/utils");
 
 // Here we stub the classes
 sinon.stub(s3, "writeFile").resolves();
@@ -80,7 +83,14 @@ describe('MVP 1.0', function() {
         let err, returnTask, dbTask;
         var name = "taskName";
         var argStream = new stream.Readable(); argStream.push(name); argStream.push(null);
-        const task = { user: "taskUser", name, priority: 0 };
+        const task = {
+            priority: 0,
+            profile: "Default",
+            userType: "WEB",
+            userId: "XLOIC",
+            fileName: "filename.pdf",
+            outputType: "HTML,DOCX"
+        };
 
         // Act
         [err, returnTask] = await to(cluster.controller.broker.call("controller.createTask", argStream, {meta: task}));
@@ -89,9 +99,9 @@ describe('MVP 1.0', function() {
         // Assert
         console.log(err)
         assert.equal(err, null);
-        assert.equal(returnTask.name, task.name);
-        assert.equal(returnTask.status, "input");        
-        assert.equal(dbTask._id, returnTask._id);
+        assert.equal(returnTask.fileName, task.fileName);
+        assert.equal(returnTask.status, "INPUT");        
+        assert.equal(dbTask.id, returnTask.id);
         assert.equal(datastore.cache.cache[task.priority].isEmpty, true);
         //assert.deepEqual(dbTask, returnTask);
 
@@ -102,7 +112,14 @@ describe('MVP 1.0', function() {
         let err, returnTask, workTask;
         var name = "taskName";
         var argStream = new stream.Readable(); argStream.push(name); argStream.push(null);
-        const task = { user: "taskUser", name, priority: 0 };
+        const task = {
+            priority: 0,
+            profile: "Default",
+            userType: "WEB",
+            userId: "XLOIC",
+            fileName: "filename.pdf",
+            outputType: "HTML,DOCX"
+        };
 
         // Act
         [err, returnTask] = await to(cluster.controller.broker.call("controller.createTask", argStream, {meta: task}));
@@ -110,9 +127,9 @@ describe('MVP 1.0', function() {
 
         // Assert
         assert.equal(err, null);
-        assert.equal(returnTask._id, workTask._id);
-        assert.equal(returnTask.status, "input");
-        assert.equal(workTask.status, "work");
+        assert.equal(returnTask.id, workTask.id);
+        assert.equal(returnTask.status, "INPUT");
+        assert.equal(workTask.status, "WORK");
         assert.equal(datastore.cache.cache[task.priority].isEmpty, true);
     });
     it ("should be able to process an single, simple, existing task", async function () {
@@ -122,9 +139,15 @@ describe('MVP 1.0', function() {
         let err, returnTask, workTask, successTask, dbTask;
         var name = "taskName";
         var argStream = new stream.Readable(); argStream.push(name); argStream.push(null);
-        const task = { user: "taskUser", name, priority: 0 };
-        var failure = sinon.spy(cluster.worker.failure);
-        var success = sinon.stub(cluster.worker, "success");
+        const task = {
+            priority: 0,
+            profile: "Default",
+            userType: "WEB",
+            userId: "XLOIC",
+            fileName: "filename.pdf",
+            outputType: "HTML,DOCX"
+        };
+        var terminate = sinon.stub(cluster.worker, "terminate");
 
         // Act
         [err, returnTask] = await to(cluster.controller.broker.call("controller.createTask", argStream, {meta: task}));
@@ -133,26 +156,26 @@ describe('MVP 1.0', function() {
         
         // Assert
         assert.equal(err, null);
-        assert.equal(returnTask._id, workTask._id);
-        assert.equal(returnTask.status, "input");
-        assert.equal(workTask.status, "work");
-        assert.equal(failure.callCount, 0);
-        assert.equal(success.callCount, 1);
-        assert.equal(success.getCall(0).args.length, 1);
-        assert.equal(success.getCall(0).args[0].status, "work");
+        assert.equal(returnTask.id, workTask.id);
+        assert.equal(returnTask.status, "INPUT");
+        assert.equal(workTask.status, "WORK");
+        assert.equal(terminate.getCall(0).args.length, 3);
+        assert.equal(terminate.getCall(0).args[0].status, "WORK");
+        assert.equal(terminate.getCall(0).args[1], "simple");
+        assert.equal(terminate.getCall(0).args[2], null);
         assert.equal(datastore.cache.cache[task.priority].isEmpty, true);
 
         // Arrange 2
-        successTask = success.getCall(0).args[0];
-        success.restore();
+        successTask = terminate.getCall(0).args[0];
+        terminate.restore();
 
         // Act 2
-        await cluster.worker.success(successTask);
+        await cluster.worker.terminate(successTask, "simple", null);
         [err, dbTask] = await to(datastore.select(workTask));
 
         // Assert 2
         assert.equal(dbTask.error, null);
-        assert.equal(dbTask.status, "output");
+        assert.equal(dbTask.status, "OUTPUT");
     });
 
     it("should be able to split a task in 2 sub tasks", async function() {
@@ -162,9 +185,15 @@ describe('MVP 1.0', function() {
         var argStream = new stream.Readable();
         argStream.push("line1"); argStream.push("\n"); argStream.push("line2");
         argStream.push(null);
-        const task = { user: "taskUser", name, priority: 0 };
-        var failure = sinon.spy(cluster.worker.failure);
-        var success = sinon.stub(cluster.worker, "success");
+        const task = {
+            priority: 0,
+            profile: "Default",
+            userType: "WEB",
+            userId: "XLOIC",
+            fileName: "filename.pdf",
+            outputType: "HTML,DOCX"
+        };
+        var terminate = sinon.stub(cluster.worker, "terminate");
 
         // Act
         [err, returnTask] = await to(cluster.controller.broker.call("controller.createTask", argStream, {meta: task}));
@@ -173,22 +202,22 @@ describe('MVP 1.0', function() {
 
         // Assert
         assert.equal(err, null);
-        assert.equal(returnTask._id, workTask._id);
-        assert.equal(returnTask.status, "input");
-        assert.equal(workTask.status, "work");
-        assert.equal(failure.callCount, 0);
-        assert.equal(success.callCount, 1);
-        assert.equal(success.getCall(0).args.length, 1);
-        assert.equal(success.getCall(0).args[0].status, "work");
+        assert.equal(returnTask.id, workTask.id);
+        assert.equal(returnTask.status, "INPUT");
+        assert.equal(workTask.status, "WORK");
+        assert.equal(terminate.getCall(0).args.length, 3);
+        assert.equal(terminate.getCall(0).args[0].status, "WORK");
+        assert.equal(terminate.getCall(0).args[1], "split");
+        assert.equal(terminate.getCall(0).args[2], null);
         assert.equal(datastore.cache.cache[task.priority].isEmpty, true);
 
         // Arrange 2
-        successTask = success.getCall(0).args[0];
-        success.restore();
+        successTask = terminate.getCall(0).args[0];
+        terminate.restore();
         //console.log(successTask)
 
         // Act 2
-        await cluster.worker.success(successTask);
+        await cluster.worker.terminate(successTask, "split", null);
         [err, dbTask] = await to(datastore.select(workTask));
 
         // Assert 2
@@ -206,8 +235,8 @@ describe('MVP 1.0', function() {
         // Arrange
         let task, returnTask1, returnTask2 , pullTask1, pullTask2;
         let err1, err2, err3, err4;
-        const task1 = { user: "taskUser1", name:"name1", priority: 0, status:"input" };
-        const task2 = { user: "taskUser2", name:"name2", priority: 1, status:"input" };
+        const task1 = { user: "taskUser1", name:"name1", priority: 1, status:"input" };
+        const task2 = { user: "taskUser2", name:"name2", priority: 0, status:"input" };
 
         // Act
         [err1, returnTask1] = await to(datastore.db.insert(task1));
@@ -230,7 +259,7 @@ describe('MVP 1.0', function() {
         assert.equal(err3, null);
         assert.equal(err4, null);
         assert.equal(datastore.cache.cache['0'].isEmpty, true);
-        assert.equal(returnTask1._id, pullTask2._id);
-        assert.equal(returnTask2._id, pullTask1._id);
+        assert.equal(returnTask1.id, pullTask2.id);
+        assert.equal(returnTask2.id, pullTask1.id);
     });
 });

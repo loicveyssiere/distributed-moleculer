@@ -1,7 +1,11 @@
 "use strict";
 
+const { uuid, logger, shortname } = require(global.APP_ROOT_DIR + "/../common/utils");
+
 function filterMonitoring(req, res, next) {
-    console.log("/filterMonitoring");
+    logger.debug("/filterMonitoring");
+
+    req.metadata.endTime = new Date();
 
     req.app.filterLogger.log({
         level: levelFromStatus(req, res), message: message(req, res)
@@ -14,7 +18,21 @@ function filterMonitoring(req, res, next) {
     METHODS
 ----------------------------------------------------------------------------- */
 function message(req, res) {
+
     return {
+        uuid: uuid(),
+        ip: req.ip,
+        method: req.method,
+        originalUrl: req.originalUrl,
+        params: req.params,
+        path: req.path,
+        pathName: req.swagger.pathName,
+        protocol: req.protocol,
+        hostname: shortname(), // req.hostname,
+        statusCode: res.statusCode,
+        contentLength: req.res._contentLength || 0,
+        responseTime: req.metadata.endTime - req.metadata.startTime
+        /*
         req: {
             ip: req.ip,
             method: req.method,
@@ -29,6 +47,7 @@ function message(req, res) {
             statusCode: res.statusCode,
             //body: res.body
         }
+        */
     }
 }
 

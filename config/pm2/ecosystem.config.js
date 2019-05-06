@@ -3,13 +3,27 @@ var node_env = process.env.NODE_ENV || "production"
 module.exports = {
   apps: [
     {
+      name: "api",
+      script: "./api/server.js",
+      instances: 1,
+      autorestart: true,
+      watch: ["./api/*.js"],
+      max_memory_restart: "1G",
+      kill_timeout: 10000,
+      exec_mode: "cluster",
+      env: {
+        NODE_ENV: node_env,
+        LOG_LEVEL: "debug"
+      }
+    },
+    {
       name: "worker",
       script: "./services/worker.service.js",
-      instances: 4,
+      instances: 1,
       autorestart: true,
       watch: "./services/worker.service.js",
       max_memory_restart: "1G",
-      kill_timeout: 30000,
+      kill_timeout: 10000,
       exec_mode: "cluster",
       env: {
         NODE_ENV: node_env
@@ -29,20 +43,22 @@ module.exports = {
     }, {
       name: "queuer",
       script: "./scripts/start-queuer.sh",
+      instances: 1,
       autorestart: true,
       watch: [
         "./services/queuer.service.js", "./common/datastore.js", "./common/*"
       ],
-      kill_timeout: 3000,
+      kill_timeout: 10000,
       env: {
         NODE_ENV: node_env
       }
     }, {
       name: "stealer",
       script: "./scripts/start-stealer.sh",
+      instances: 1,
       autorestart: true,
       watch: "./services/stealer.service.js",
-      kill_timeout: 3000,
+      kill_timeout: 10000,
       env: {
         NODE_ENV: node_env
       }

@@ -10,6 +10,13 @@ module.exports = {
       watch: ["./scripts/start-filebeat.sh"],
       max_memory_restart: "1G"
     }, {
+      name: "hbase_sync",
+      script: "./api/billingLogstash.js",
+      instances: 1,
+      autorestart: true,
+      watch: ["./api/billingLogstash.js"],
+      max_memory_restart: "1G"
+    }, {
         name: "logstash",
         script: "./scripts/start-logstash.sh",
         instances: 1,
@@ -30,6 +37,13 @@ module.exports = {
         autorestart: false,
         watch: ["./scripts/start-kibana.sh"],
         max_memory_restart: "1G"
-    }
+    }, {
+      name: "grafana",
+      script: "./scripts/start-grafana.sh",
+      instances: 1,
+      autorestart: false,
+      watch: ["./scripts/start-grafana.sh"],
+      max_memory_restart: "1G"
+  }
   ]
 };

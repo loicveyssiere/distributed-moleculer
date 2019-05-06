@@ -17,24 +17,39 @@ const { uuid, logger, to } = require("../common/utils");
 const assert = require('assert');
 
 const fields = {
-    user: 1,
-    name: 1,
+    /* Task */
     status: 1,
     priority: 1,
-    input: 1,
-    output: 1,
+    profile: 1, 
+    /* User */
+    userType: 1,
+    userId: 1,
+    /* File */
+    fileName: 1,
+    fileSize: 1,
+    inputPath: 1,
+    outputType: 1,
+    outputPath: 1,
+    totalPages: 1,
+    /* Time */
     submitTime: 1,
     startTime: 1,
-    nextTime: 1,
-    duration: 1,
-    process: 1,
+    lastStartTime: 1,
+    availabilityTime: 1,
+    userDuration: 1,
+    cpuDuration: 1,
+    processDuration: 1,
+    /* Node */
+    site: 1,
+    hostName: 1,
+    /* Error */
     tries: 1,
-    hostname: 1,
-    error: 1,
-    parentId: 1, // If child
-    childrenTotal: 1, // If parent
-    childrenCompleted: 1, // If parent
-    children: 1 // List of object
+    errorMessage: 1,
+    /* Children */
+    childrenArray: 1,
+    parentId: 1,
+    childrenTotal: 1, 
+    childrenCompleted: 1
 };
 
 class Scanner {
@@ -91,7 +106,7 @@ class db {
 
     constructor(options) {
         this.client = nedb.create(); //new nedb();
-        this.primary = "_id";
+        this.primary = "id";
         this.client.ensureIndex({fieldName: ['status','nextTime']});
         this.scanner = new Scanner({client: this.client});
     }
@@ -165,11 +180,6 @@ class db {
         return this.client.update(filter, updater,
             { returnUpdatedDocs: returnTask }
         );
-    }
-
-    getTableName(id) {
-        let stringPriority = id.substring(0, 4);
-        return `taskP${stringPriority}`;
     }
 }
 

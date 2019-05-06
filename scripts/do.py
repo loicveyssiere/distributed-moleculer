@@ -5,12 +5,12 @@
 The input task (json string) is read on stdin:
 {
     user, name, status, input, output, childrenCompleted, childrenTotal # to use later
-    tempInput | children
+    tempInput | childrenArray
 }
 
 The output task (json string) is written on stdout:
 {
-    tempOutput | children
+    tempOutput | childrenArray
 }
 
 """
@@ -27,7 +27,9 @@ n_split = 1
 
 if ("tempInput" in json_input):
     with open(json_input["tempInput"], 'r') as f:
-        n_split = len(f.readlines())
+        content = f.readlines()
+        n_split = len(content)
+        print(content, file=sys.stderr)
 
 merge = ("childrenCompleted" in json_input and "childrenTotal" in json_input) \
     and json_input["childrenCompleted"] == json_input["childrenTotal"]
@@ -39,12 +41,11 @@ split = (n_split > 1)
 if (merge):
     print("MERGE MODE PYTHON ", file=sys.stderr)
     json_output = json_input
-    print(json_input["children"], file=sys.stderr)
-    tempOutputName = json_input["children"][0]["tempInput"].split('.')[0] + ".out"
+    tempOutputName = json_input["childrenArray"][0]["tempInput"].split('.')[0] + ".out"
     json_output["tempOutput"] = tempOutputName
     tempOutput = open(tempOutputName, 'w')
     
-    for child in json_input["children"]:
+    for child in json_input["childrenArray"]:
         tempInput = open(child["tempInput"], 'r')
         content = tempInput.readline()
         print("content " + content, file=sys.stderr)
@@ -59,14 +60,14 @@ if (merge):
 elif (split):
     print("SPLIT MODE PYTHON", file=sys.stderr)
     json_output = json_input
-    json_output["children"] = []
+    json_output["childrenArray"] = []
 
     name = json_input["tempInput"].split(".")[0]
 
     with open(json_input["tempInput"], 'r') as f:
         for index, line in enumerate(f.readlines()):
             childTempOutputName = "{}.{}.part.out".format(name, str(index))
-            json_output["children"].append({
+            json_output["childrenArray"].append({
                 "tempOutput": childTempOutputName
             })
             with open(childTempOutputName, 'w') as f:

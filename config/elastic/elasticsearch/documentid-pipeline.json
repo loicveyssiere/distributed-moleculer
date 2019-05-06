@@ -1,0 +1,19 @@
+{
+    "description": "Used to avoid duplication on restart",
+    "processors": [
+        {
+            "date": {
+              "field": "timestamp",
+              "target_field": "_unix",
+              "formats": ["ISO8601"]
+            }
+          }
+      {
+        "set": {
+          "field": "_id",
+          "value": "{{@timestamp}}-{{uuid}}"
+        }
+      }
+    ]
+  }
+  

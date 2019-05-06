@@ -1,0 +1,25 @@
+filebeat.prospectors:
+- type: log
+  paths:
+  - './tmp/logs/api/ocr.api.*'
+  json.keys_under_root: true
+  json.add_error_key: true
+  #json.message_key: log
+
+setup.template.enabled: false
+setup.template.overwrite: true
+setup.template.name: "onv_ocr_api"
+setup.template.pattern: "onv_ocr_api-*"
+setup.template.path: "/Users/loicveyssiere/Documents/Programmation/SoGe/distributed-moleculer/config/elastic/logstash/template_onv_ocr_api.json"
+
+output.elasticsearch:
+  hosts: ["localhost:9200"]
+  pipeline: api-pipeline
+  index: onv_ocr_api-%{+yyyy.MM.dd.HH}
+  #template.name: onv_ocr_api
+  #template.path: /Users/loicveyssiere/Documents/Programmation/SoGe/distributed-moleculer/config/elastic/logstash/template_onv_ocr_api.json
+
+
+
+#output.logstash:
+#  hosts: ["127.0.0.1:5044"]

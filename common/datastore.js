@@ -1,51 +1,87 @@
-"user strict";
+"use strict";
 
 const nedb = require("nedb-promises");
-const { to, logger } = require("./utils");
+const { to, logger, uuid } = require("./utils");
 const { PriorityCache } = require("./structures");
+const s3 = require("./s3");
 const db = require("./db_hbase");
+const EventEmitter = require('events');
 
-stats = { input: 0, work: 0, output: 0, error: 0, total: 0 };
+var stats = { input: 0, work: 0, output: 0, error: 0, total: 0 };
 
-shift = (offset, date) => new Date((date ? date : new Date()).getTime() + offset);
+var shift = (offset, date) => new Date((date ? date : new Date()).getTime() + offset);
 
-class DataStore {
-    constructor() {
-        console.log("init datastore");
-        this.db = new db();
+class DataStore extends EventEmitter {
+    constructor(config) {
+        super();
+        var self = this;
+        this.dbTask = new db({
+            family: 'C',
+            primary: 'id',
+            schema: 'onv_ocr_2',
+            table: 'task',
+            hbase: config.hbaseOptions
+        });
+        this.dbBilling = new db({
+            family: 'C',
+            primary: 'id',
+            schema: 'onv_ocr_2',
+            table: 'billing',
+            hbase: config.hbaseOptions
+        });
         this.priorities = {};
         this.cache = new PriorityCache();
+        this.dbTask.on("error", err => {
+            self.emit('error', err);
+        });
+        this.dbBilling.on("error", err => {
+            self.emit('error', err);
+        });
     }
 
     /**
      * Creation of a new task, inserting in the database and in the in-memory queue
      * 
-     * @param {object} item A minimal task with: user(string), name(string),
-     * priority(string), input(string), output(string)
+     * @param {object} item A minimal task with: userId(string), fileName(string),
+     * priority(string), inputPath(string), outputPath(string)
      * @param {string} parentId if any
      * @return {Task} A full Task object as described in the database
      */
     async insert(item, parentId) {
         let err, task;
         task = {
-            user: item.user,
-            name: item.name,
-            status: "input",
-            priority: item.priority | 0,
-            input: item.input,
-            output: item.output,
+            status: "INPUT",
+            priority: item.priority,
+            profile: item.profile,
+            userType: item.userType,
+            userId: item.userId,
+            fileName: item.fileName,
+            fileSize: 0,
+            inputPath: item.inputPath,
+            outputType: item.outputType,
+            outputPath: item.outputPath,
+            totalPages: 0,
             submitTime: Date.now(),
             startTime: null,
-            nextTime: Date.now(),
-            duration: 0,
-            process: 0,
+            lastStartTime: null,
+            availabilityTime: null,
+            userDuration: 0,
+            cpuDuration: 0,
+            processDuration: 0,
+            site: item.site,
+            hostName: item.hostName,
+            //siteProcessor: null,
+            //hostNameProcessor: null,
             tries: 0,
-            parentId
+            errorMessage: null,
+            parentId: parentId
         };
-        [err, task] = await to(this.db.insert(task));
+        let stringPriority = ("0000" + task.priority).slice(-4);
+        task.id = stringPriority + '.' + uuid();
+        [err, task] = await to(this.dbTask.insert(task));
         if (err) { logger.error(err); throw err; }
 
-        this.cache.push(task._id, task.priority);
+        this.cache.push(task.id, task.priority);
         stats.input++;
         stats.total++;
         
@@ -54,17 +90,20 @@ class DataStore {
 
     /** 
      * Select a task only from the database, mainly to check status
+     * @info Select for a non existing task is by default null, no error is
+     * expected. 
      * 
-     * @param {object} item A task containing _id(string)
+     * @param {object} item A task containing id(string)
      * @return {Task} A full Task object as described in the database
      */
     async select(item) {
         let err, task;
-        [err, task] = await to(this.db.get(item._id));
-        logger.warn(JSON.stringify(task));
+        [err, task] = await to(this.dbTask.get(item.id));
         if (err) { logger.error(err); throw err; }
-        if (!task) throw "not found (select)";
-        
+
+        // Log that the task doesn't exist and continue. 
+        if (!task) logger.warn(`The selected task ${item.id} does not exist`);
+
         return task;
     }
 
@@ -72,16 +111,16 @@ class DataStore {
      * Delete a task by removing it only from the database
      * 
      * FIXME: what if the one to delete is in input status (i.e still in the queue)
-     * @param {object} item A task containing _id(string)
+     * @param {object} item A task containing id(string)
      * @return {Task} A full Task object as described in the database
      */
     async delete(item) {
         let err, task;
-        [err, task] = await to(this.db.get(item._id));
+
+        [err, task] = await to(this.dbTask.get(item.id));
         if (err) { logger.error(err); throw err; }
-        if (!task) throw "not found (delete)";
-        
-        [err] = await to(this.db.remove(item._id));
+ 
+        [err] = await to(this.dbTask.remove(item.id));
         if (err) { logger.error(err); throw err; }
         
         return task;
@@ -101,26 +140,28 @@ class DataStore {
             let id = this.cache.pop();
             if (id == null) break;
             // TODO: we should do better here
-            [err, task] = await to(this.db.get(id));
+            [err, task] = await to(this.dbTask.get(id));
 
             if (err) { logger.error(err); return null; }
             if (!task) return null;
-            if (task.status === "input") {
-                [err, task] = await to(this.db.update(id, {
-                    check: {status: "input"},
+            if (task.status === "INPUT") {
+                [err, task] = await to(this.dbTask.update(id, {
+                    check: {status: "INPUT"},
                     set: {
-                        status: "work",
-                        startTime: Date.now()
+                        status: "WORK",
+                        startTime: Date.now(),
+                        lastStartTime: Date.now()
                     },
                     increment: null,
                     returnTask: true
                 }));
-            } else if (task.status === "complete") {
-                [err, task] = await to(this.db.update(id, {
-                    check: {status: "complete"},
+            } else if (task.status === "COMPLETE") {
+                [err, task] = await to(this.dbTask.update(id, {
+                    check: {status: "COMPLETE"},
                     set: {
-                        status: "work",
-                        startTime: Date.now()
+                        status: "WORK",
+                        //startTime: Date.now(),
+                        lastStartTime: Date.now()
                     },
                     increment: null,
                     returnTask: true
@@ -144,35 +185,36 @@ class DataStore {
 
     async save_on_failure(inputTask) {
         let wakeup, err, task;
-        [err, task] = await to(this.db.get(inputTask._id));
+        [err, task] = await to(this.dbTask.get(inputTask.id));
         if (err) { logger.error(err); throw err; }
         if (!task) return;
         //
         if (task.tries < 10) {
-            task.status = task.childrenTotal > 0 ? "complete" : "input";
+            task.status = task.childrenTotal > 0 ? "COMPLETE" : "INPUT";
             wakeup = true;
             task.tries++;
         } else {
-            task.status = "error";
+            task.status = "ERROR";
             wakeup = false;
         }
         //
-        [err] = await to(this.db.update(task._id, {
+        [err] = await to(this.dbTask.update(task.id, {
             check: null,
             set: {
                 status: task.status,
                 tries: task.tries,
-                nextTime: shift(5000),
-                error: task.error,
-                hostname: task.hostname
+                errorMessage: task.errorMessage,
+                //hostName: task.hostName
+                siteProcessor: task.siteProcessor,
+                hostNameProcessor: task.hostNameProcessor
             },
             increment: null,
             returnTask: false
         }));      
         if (err) { logger.error(err); throw err; }
         //
-        if (task.status === "input") {
-            this.cache.push(task._id, task.priority);
+        if (task.status === "INPUT") {
+            this.cache.push(task.id, task.priority);
             stats.input++;
         } else {
             stats.error++;
@@ -186,18 +228,23 @@ class DataStore {
      * input => output
      */
     async save_on_simple(inputTask) {
-        logger.debug("save_on_simple");
+        logger.warn("save_on_simple");
         let err;
         let wakeup = false;
-        [err] = await to(this.db.update(inputTask._id, {
+        let now = Date.now();
+        [err] = await to(this.dbTask.update(inputTask.id, {
             check: null,
             set: {
-                status: "output",
-                duration: Date.now() - inputTask.submitTime,
-                process: Date.now() - inputTask.startTime,
-                nextTime: null,
-                error: null,
-                hostname: inputTask.hostname
+                status: "OUTPUT",
+                availabilityTime: now,
+                userDuration: now - inputTask.submitTime,
+                processDuration: now - inputTask.startTime,
+                cpuDuration: now - inputTask.startTime,
+                errorMessage: null,
+                //hostName: inputTask.hostName,
+                //site: inputTask.site
+                siteProcessor: inputTask.siteProcessor,
+                hostNameProcessor: inputTask.hostNameProcessor
             },
             increment: null,
             returnTask: false
@@ -217,16 +264,20 @@ class DataStore {
         logger.debug("save_on_child");
         let wakeup = false;
         let task, parentTask, err;
+        let now = Date.now();
         // Update the task
-        [err, task] = await to(this.db.update(inputTask._id, {
+        [err, task] = await to(this.dbTask.update(inputTask.id, {
             check: null,
             set: {
-                status: "output",
-                duration: Date.now() - inputTask.submitTime,
-                process: Date.now() - inputTask.startTime,
-                nextTime: null,
-                error: null,
-                hostname: inputTask.hostname
+                status: "OUTPUT",
+                availabilityTime: now,
+                userDuration: now - inputTask.submitTime,
+                processDuration: now - inputTask.startTime,
+                cpuDuration: now - inputTask.startTime,
+                errorMessage: null,
+                //hostName: inputTask.hostName
+                siteProcessor: inputTask.siteProcessor,
+                hostNameProcessor: inputTask.hostNameProcessor
             },
             increment: null,
             returnTask: true
@@ -234,11 +285,14 @@ class DataStore {
         if (err) { logger.error(err); throw err; }
 
         // Update the parent
-        [err, parentTask] = await to(this.db.update(inputTask.parentId, {
-            check: {status: "wait"},
-            set: {status: "wait"},
+        [err, parentTask] = await to(this.dbTask.update(inputTask.parentId, {
+            check: {status: "WAIT"},
+            set: {
+                status: "WAIT",
+                lastStartTime: Date.now()
+            },
             increment: {
-                process: task.process, // TODO: check what expected
+                cpuDuration: task.cpuDuration,
                 childrenCompleted: 1,
             },
             returnTask: true
@@ -247,16 +301,16 @@ class DataStore {
 
         // Eventually update the parent status
         if (parentTask.childrenCompleted === parentTask.childrenTotal) {
-            [err, parentTask] = await to(this.db.update(inputTask.parentId, {
-                check: {status: "wait"},
-                set: {status: "complete"},
+            [err, parentTask] = await to(this.dbTask.update(inputTask.parentId, {
+                check: {status: "WAIT"},
+                set: {status: "COMPLETE"},
                 increment: null,
                 returnTask: true
             })); 
             if (err) { logger.error(err); throw err; }
             
             // Add parent to list
-            this.cache.push(parentTask._id, parentTask.priority);
+            this.cache.push(parentTask.id, parentTask.priority);
             wakeup = true;
         }
         return wakeup;
@@ -269,35 +323,62 @@ class DataStore {
         logger.debug("save_on_split");
         let err;
         let wakeup = true;
+        let now = Date.now();
 
-        [err] = await to(this.db.update(inputTask._id, {
+        [err] = await to(this.dbTask.update(inputTask.id, {
             check: null,
             set: {
-                status: "wait",
-                process: Date.now() - inputTask.startTime,
-                nextTime: null,
-                error: null,
-                hostname: inputTask.hostname,
-                childrenCompleted: 0,
-                childrenTotal: inputTask.children.length,
-                children: inputTask.children
+                status: "WAIT",
+                processDuration: now - inputTask.startTime,
+                cpuDuration: now - inputTask.startTime,
+                //hostName: inputTask.hostName,
+                errorMessage: null,
+                siteProcessor: inputTask.siteProcessor,
+                hostNameProcessor: inputTask.hostNameProcessor
             },
             increment: null,
             returnTask: false
-        }));  
-        logger.info("success:", inputTask);
+        }));
 
-        // Insert the children
-        for (let child of inputTask.children) {
-            child.user = inputTask.user;
-            child.name = inputTask.name;
+        var childrenArray = new Array();
+
+        // Insert the children - should follow the specs of queuer.createTask
+        for (let child of inputTask.childrenArray) {
+
+            child.userType = inputTask.userType;
+            child.userId = inputTask.userId;
             child.priority = inputTask.priority;
+            child.profile = inputTask.profile;
+            child.userType = inputTask.userType;
+            child.userId = inputTask.userId;
+            child.fileName = inputTask.fileName;
+            child.outputType = inputTask.outputType;
+            child.site = inputTask.site;
+            child.hostName = inputTask.hostName;
+
             try {
-                await this.insert(child, inputTask._id); // TODO: check correctness
-            } catch(e) {
-                console.log(e);
-            }
+                let childTask = await this.insert(child, inputTask.id);
+                childrenArray.push({
+                    id: childTask.id,
+                    inputPath: childTask.inputPath,
+                    outputPath: childTask.outputPath
+                });
+            } catch (err) {
+                throw err;
+            } 
+            if (err) { logger.error(err); throw err; }
         }
+
+        [err] = await to(this.dbTask.update(inputTask.id, {
+            check: {status: "WAIT"},
+            set: {
+                childrenArray: childrenArray,
+                childrenTotal: childrenArray.length
+            },
+            increment: null,
+            returnTask: false
+        }));
+
         return wakeup;
     }
 
@@ -305,68 +386,100 @@ class DataStore {
         logger.debug("save_on_merge");
         let err;
         let wakeup = false;
-        [err] = await to(this.db.update(inputTask._id, {
+        let now = Date.now();
+        [err] = await to(this.dbTask.update(inputTask.id, {
             check: null,
             set: {
-                status: "output",
-                duration: Date.now() - inputTask.submitTime,
-                nextTime: null,
-                error: null,
-                hostname: inputTask.hostname
+                status: "OUTPUT",
+                availabilityTime: now,
+                userDuration: now - inputTask.submitTime,
+                processDuration: now - inputTask.startTime,
+                errorMessage: null,
+                //hostName: inputTask.hostName
+                siteProcessor: inputTask.siteProcessor,
+                hostNameProcessor: inputTask.hostNameProcessor
             },
             increment: {
-                process: Date.now() - inputTask.startTime,
+                cpuDuration: now - inputTask.lastStartTime
             },
             returnTask: false
         }));
-
         if (err) { logger.error(err); throw err; }
+
+        // Cleanup children
+        for (let child of inputTask.childrenArray) {
+            [err] = await to(s3.deleteFile(child.outputPath));
+            [err] = await to(s3.deleteFile(child.inputPath));
+            this.delete(child);
+        }
         return wakeup;
+    }
+
+    async billing(id) {
+
+        let err, task;
+        [err, task] = await to(this.dbTask.get(id));
+        if (err) { logger.error(err); throw err; }
+
+        logger.info("Finished task ", task);
+
+        let site = task.site
+        let billingDate = new Date().toISOString();
+        task.taskId = task.id;
+
+        task.id = `${billingDate}.${site}.${task.taskId}`;
+
+        [err, task] = await to(this.dbBilling.insert(task));
+        if (err) { throw err; }
     }
 
     /**
      * Load or reload in-memory queue from the persistent database
      */
     async reload() {
-        let priority_max = 0;
         let priority_min = 0;
-
+        let priority_max = 100;
+        
         let err;
         let self = this;
-        let scanner = this.db.scanner;
 
         // clean existing queue
         // TODO: add clear method to cache structure;
 
         for (let i = priority_max; i >=priority_min; i--) {
-            let stringPriority = ("0000" + i).slice(-4);
-            let table = self.db.getTableName(stringPriority);
-            scanner.init({table: table});
-            [err] = await to(scanner.each(async function(err, task) {
+            let startRow = ("0000" + i.toString()).slice(-4);
+            let stopRow = ("0000" + (i+1).toString()).slice(-4);
+            let scanner = this.dbTask.scanner(startRow, stopRow);
+
+            [err] = await to(scanner.each(async function(err, task, done) {
                 try {
                     let updater = null;
-                    let statusPush = ["input", "complete", "wait"]
+                    let statusPush = ["INPUT", "COMPLETE", "WAIT"]
                     if (statusPush.indexOf(task.status) > -1) {
-                        self.cache.push(task._id, task.priority);
-                    } else if (task.status == "work") {
+                        logger.info(`Restoring "${task.id}"`);
+                        self.cache.push(task.id, task.priority);
+                    } else if (task.status == "WORK") {
                         if (!task.childrenTotal) {
-                            updater = {check: {status:"work"}, set: {status:"input"}};
+                            updater = {check: {status:"WORK"}, set: {status:"INPUT"}};
                         }
                         else if (task.childrenCompleted == task.childrenTotal) {
-                            updater = {check: {status:"work"}, set: {status:"complete"}};
+                            updater = {check: {status:"WORK"}, set: {status:"COMPLETE"}};
                         } else {
                             let error = new Error("This situation is supposed to be impossible")
                             logger.error(error);
+                            return done(error);
                         }
                         if (updater) {
-                            [err] = await to(self.db.update(task._id, updater));
+                            [err] = await to(self.dbTask.update(task.id, updater));
                             if (!err) {
                                 throw err;
                             } else {
-                                self.cache.push(task._id, task.priority);
+                                logger.info(`Restoring & correcting "${task.id}"`);
+                                self.cache.push(task.id, task.priority);
                             }
                         }
                     }
+                    return done();
                     //stats.input++;
                     //stats.total++;
                 } catch (exception) {

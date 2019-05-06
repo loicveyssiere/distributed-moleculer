@@ -1,7 +1,10 @@
 "use strict";
 
+const { logger } = require("../common/utils");
+
+
 function checkLimitUsage(req, res, next) {
-    console.log("/checkLimitUsage");
+    logger.debug("/checkLimitUsage");
     next();
 }
 

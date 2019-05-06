@@ -13,10 +13,13 @@
   "dependencies": {
     "bytebuffer": "^2.3.2",
     "commander": "^2.19.0",
+    "crypto": "^1.0.1",
     "death": "^1.1.0",
     "express": "^4.16.4",
     "express-winston": "^3.1.0",
     "hbase-rpc-client": "^0.1.15",
+    "https": "^1.0.0",
+    "int64-buffer": "^0.99.1007",
     "minio": "^7.0.5",
     "mocha": "^6.0.2",
     "moleculer": "^0.13.7",
@@ -25,6 +28,7 @@
     "nanoid": "^2.0.1",
     "natsboard": "^5.0.0",
     "nedb-promises": "^3.0.2",
+    "node-cache": "^4.2.0",
     "p-queue": "^3.1.0",
     "pm2": "^3.3.1",
     "pmx": "^1.6.7",
@@ -32,8 +36,10 @@
     "request": "^2.88.0",
     "sinon": "^7.2.7",
     "swagger-express-middleware": "^2.0.2",
+    "swagger-ui-express": "^4.0.2",
     "winston": "^3.2.1",
-    "winston-daily-rotate-file": "^3.8.0"
+    "winston-daily-rotate-file": "^3.8.0",
+    "yamljs": "^0.3.0"
   },
   "devDependencies": {
     "nats": "^1.2.2"

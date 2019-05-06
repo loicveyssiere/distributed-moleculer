@@ -1,0 +1,329 @@
+swagger: '2.0'
+
+# INFO =========================================================================
+info:
+  description: "description"
+  version: "1.0.0"
+  title: "OCR Scheduler"
+host: osmose-ocr.safe.socgen
+schemes:
+- https
+consumes:
+- application/json
+produces:
+- application/json
+
+# SECURITY =====================================================================
+securityDefinitions:
+  basicAuth:
+    type: basic
+security:
+  - basicAuth: []
+
+# PATH =========================================================================
+paths:
+  /rest/ocr/v1/task:
+    get:
+      summary: 'Get swagger file'
+      description: 'Get the swagger file (JSON) for the API endpoint specifications'
+      produces:
+      - application/json
+      responses:
+        200:
+          description: Successful
+    post:
+      summary: 'Insert a new task'
+      description: 'Insert a new task'
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: OcrTaskRequest
+        required: true
+        description: ''
+        schema:
+          $ref: '#/definitions/OcrTaskRequest'
+      responses:
+        200:
+          description: Successful
+          schema:
+            $ref: '#/definitions/OcrTaskResponse'
+  /rest/ocr/v1/task/{taskId}/status:
+    get:
+      summary: 'Ping a task'
+      description: 'Get the processing status of the task.
+      Return 200 code if the document is available otherwise return 202,
+      the task is still in process.'
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        type: string
+      responses:
+        200:
+          description: Successful, processing is complete - download available
+        202:
+          description: Accepted, processing has started - keep pinging until non-202 response
+  /rest/ocr/v1/task/{taskId}:
+    get:
+      summary: 'get a document'
+      description: 'Get the document corresponding to the task by downloading it'
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        type: string
+      responses:
+          200:
+            description: Successful
+            schema:
+              example: document byte content
+              type: string
+              format: byte
+    delete:
+      summary: 'Delete a task'
+      description: 'Delete the corresponding task'
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        type: string
+      responses:
+          200:
+            description: Successful
+  /rest/ocr/v1/task/{taskId}/details:
+    get:
+      summary: 'Details of a task'
+      description: 'Get most of the available information about a given task'
+      produces:
+      - application/json
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        type: string
+      responses:
+          200:
+            description: Successful
+            schema:
+              $ref: '#/definitions/OcrTaskDetailsResponseElement'
+  /rest/ocr/v1/task/{taskId}/{outputType}:
+    get:
+      summary: 'Get a document by type'
+      description: 'Get the document corresponding to the task and the type'
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        type: string
+      - name: outputType
+        in: path
+        required: true
+        type: string
+      responses:
+          501:
+            description: Not Implemented
+
+# Definitions ==================================================================
+definitions:
+  # ----------------------------------------------------------------------------
+  OcrOutputType:
+    title: OcrOutputType
+    description: 'Possible file output format'
+    example: PDF
+    type: string
+    enum:
+    - HTML
+    - XLSX
+    - DOCX
+    - TXT
+    - XML
+    - PDF
+  # ----------------------------------------------------------------------------
+  OcrProfile:
+    title: OcrProfile
+    description: ''
+    type: string
+    example: Default
+    enum:
+      - Default
+      - DocumentConversion_Accuracy
+      - DocumentConversion_Speed
+      - DocumentArchiving_Accuracy
+      - DocumentArchiving_Speed
+      - BookArchiving_Accuracy
+      - BookArchiving_Speed
+      - TextExtraction_Accuracy
+      - TextExtraction_Speed
+      - FieldLevelRecognition
+      - HighCompressedImageOnlyPdf
+      - BusinessCardsProcessing
+      - EngineeringDrawingsProcessing
+  # ----------------------------------------------------------------------------
+  OcrStatus:
+    title: OcrStatus
+    description: ''
+    example: INPUT
+    type: string
+    enum:
+    - INPUT
+    - OUTPUT 
+    - WORK
+    - ERROR 
+    - WAIT 
+    - COMPLETE 
+  # ----------------------------------------------------------------------------
+  OcrTaskRequestElement:
+    title: OcrTaskRequestElement
+    description: ''
+    type: object
+    properties:
+      fileName:
+        description: ''
+        type: string
+      contents:
+        description: ''
+        type: string
+        format: binary
+      outputTypes:
+        description: ''
+        type: array 
+        minItems: 1
+        maxItems: 7
+        items:
+          $ref: '#/definitions/OcrOutputType'
+      ocrProfile:
+        type: string
+    required:
+    - fileName
+    - contents
+    - outputTypes
+    example: 
+      fileName: filename.pdf
+      contents: "content of the file"
+      outputTypes:
+      - PDF
+      - HTML
+      ocrProfile: "Default"
+      
+  # ----------------------------------------------------------------------------
+  OcrTaskResponseElement:
+    title: OcrTaskResponseElement
+    description: ''
+    type: object
+    properties:
+      taskId:
+        description: ''
+        type: string
+      fileName:
+        description: ''
+        type: string
+    required:
+      - taskId
+      - fileName
+    example: 
+      taskId: 000.abcd
+      fileName: filename.pdf
+  # ----------------------------------------------------------------------------
+  OcrTaskDetailsResponseElement:
+    title: OcrTaskDetailsResponseElement
+    description: ''
+    type: object
+    properties:
+      # Task #
+      taskId:
+        description: ''
+        type: string
+      status:
+        $ref : '#/definitions/OcrStatus'
+      priority:
+        description: ''
+        type: integer
+        format: int32
+      profile:
+        description: ''
+        type: string
+      # File #
+      fileName:
+        description: ''
+        type: string
+      fileSize:
+        description: ''
+        type: integer
+        format: int32
+      outputTypes:
+        description: '' 
+        type: array
+        items:
+          $ref: '#/definitions/OcrOutputType'
+      # Time #
+      submitDate:
+        description: 'format YYYY-MM-DDTHH-mm-ss'
+        type: string
+      startTime:
+        description: 'format YYYY-MM-DDTHH-mm-ss'
+        type: string
+      duration:
+        description: 'in seconds'
+        type: integer
+        format: int32
+      # Error #
+      tries:
+        description: ''
+        type: integer
+        format: int32
+      errorMessage:
+        description: ''
+        type: string
+    required:
+    - taskId
+    - status
+    - priority
+    - profile
+    - fileName
+    - fileSize
+    - submitDate
+    - outputTypes
+    - tries
+    example:
+      taskId: 0000.abcd
+      status: ERROR
+      priority: 2
+      profile: Default
+      fileName: filename.pdf
+      fileSize: 142
+      submitDate: "2019-01-05T12:00:00"
+      outputTypes: 
+      - PDF
+      tries: 10
+      errorMessage: "some error trace"
+  # ----------------------------------------------------------------------------
+  OcrTaskRequest:
+    title: OcrTaskRequest
+    description: ''
+    type: object
+    properties:
+      ocrTaskRequestElements:
+        description: ''
+        type: array
+        minItems: 1
+        items:
+          $ref: '#/definitions/OcrTaskRequestElement'
+    required:
+    - ocrTaskRequestElements
+  # ----------------------------------------------------------------------------
+  OcrTaskResponse:
+    title: OcrTaskResponse
+    description: ''
+    type: object
+    properties:
+      ocrTaskResponseElements:
+        description: ''
+        type: array
+        minItems: 1
+        items:
+          $ref: '#/definitions/OcrTaskResponseElement'
+    required:
+    - ocrTaskResponseElements

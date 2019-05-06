@@ -14,6 +14,7 @@ class PriorityItem {
  */
 class PriorityQueue {
     constructor() {
+        this.length = 0;
         this.first = null;
         this.last = null;
     }
@@ -25,12 +26,14 @@ class PriorityQueue {
             this.last = new PriorityItem(id);
             this.first = this.last;
         }
+        this.length++;
     }
     pop() {
         if (this.first == null) return null;
         let item = this.first.data;
         this.first = this.first.next;
         if (this.first == null) this.last = null;
+        this.length--;
         return item;
     }
     merge(queue) {
@@ -44,6 +47,12 @@ class PriorityQueue {
         queue.first = null;
         queue.last = null;
     }
+    length() {
+        return this.length;
+    }
+    isEmpty() {
+        return (this.length === 0);
+    }
 }
 
 /**
@@ -54,7 +63,7 @@ class PriorityList {
         this.current = new PriorityQueue();
         this.future = new PriorityQueue();
         this.futureTime = new Date().getTime() + 5000;
-        this.isEmpty = true;
+        //this.isEmpty = true;
     }
     push(id, lag) {
         let q = lag ? this.future : this.current;
@@ -69,9 +78,15 @@ class PriorityList {
         let item = this.current.pop();
         if (item == null) return null;
         // update isEmpty
-        this.isEmpty = this.current.first == null && this.future.first == null;
+        //this.isEmpty = this.current.first == null && this.future.first == null;
         //
         return item;
+    }
+    length() {
+        return this.current.length() + this.future.length();
+    }
+    isEmpty() {
+        return (this.current.isEmpty() && this.future.isEmpty());
     }
 }
 
@@ -89,8 +104,6 @@ class PriorityCache {
         if (list === undefined) {
             list = new PriorityList();
             this.cache[priority] = list;
-        }
-        if (list.isEmpty) {
             this.priorities.push(priority);
             this.priorities.sort();
         }
@@ -102,8 +115,9 @@ class PriorityCache {
             let list =  this.cache[priority];
             let item = list.pop();
             if (item != null) {
-                if (list.isEmpty) {
+                if (list.isEmpty()) {
                     this.priorities.splice(i,1);
+                    delete this.cache[priority];
                 }
                 return item;
             }
@@ -111,7 +125,7 @@ class PriorityCache {
         return null;
     }
     highestPriority() {
-        return this.priorities[this.priorities-1];
+        return this.priorities[this.priorities.length-1];
     }
 }
 

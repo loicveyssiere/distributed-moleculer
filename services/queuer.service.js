@@ -4,7 +4,7 @@ global.APP_ROOT_DIR = global.APP_ROOT_DIR || __dirname;
 
 
 const { ServiceBroker } = require("moleculer");
-const { loadConfig, death, exit, to, logger } = require(global.APP_ROOT_DIR + "/../common/utils");
+const { loadConfig, death, exit, to, logger, shortname } = require(global.APP_ROOT_DIR + "/../common/utils");
 const s3 = require(global.APP_ROOT_DIR + "/../common/s3");
 const DataStore = require(global.APP_ROOT_DIR + "/../common/datastore");
 //const datastore = require(global.APP_ROOT_DIR + "/../common/datastore");
@@ -45,13 +45,15 @@ const service = {
     async started() {
         // Fired when `broker.start()` called.
         try {
-            this.settings.datastore = new DataStore();
+            this.settings.datastore = new DataStore(config);
+            this.settings.datastore.on("error", err => {
+                process.exit(1);
+            });
             this.reload();
-            this.run();
         } catch (e) {
             logger.error(e);
         }
-        setInterval(this.run, 1000);
+        setInterval(this.run, 10000);
     }
 }
 
@@ -86,7 +88,8 @@ if (!module.parent) {
  * @info Molecular forces to use a specific interface for streams. The stream
  * needs the only param of ctx and other information goes to meta. 
  * @param {object} ctx.params Stream of the document to process
- * @param {object} ctx.meta Task with fields: name(string), id(string), priority(int)
+ * @param {object} ctx.meta Task with fields: priority(int), profile(string),
+ * userType(string), userId(string), fileName(string), outputType(string)
  * @return {Task} A full Task object as described in the database 
  */
 async function createTask(ctx) {
@@ -95,17 +98,16 @@ async function createTask(ctx) {
     logger.debug("create:", task);
     
     filename = s3.newFilename();
-    task.input = `${filename}.in`;
-    task.output = `${filename}.out`;
+    task.inputPath = `${filename}.in`;
+    task.outputPath = `${filename}.out`;
+    task.site = this.broker.options.site;
+    task.hostName = shortname();
 
-    [err, dataS3] = await to(s3.writeFile(ctx.params, task.input));
+    [err, dataS3] = await to(s3.writeFile(ctx.params, task.inputPath));
     if (err) { logger.error(err); throw err; }
     
     [err, task] = await to(this.settings.datastore.insert(task));
     if (err) { logger.error(err); throw err; }
-    
-    // generate a full global id
-    task = toid(task);
     
     logger.debug("created:", task);
     this.broker.broadcast("worker.wakeup");
@@ -123,40 +125,33 @@ async function createTask(ctx) {
 async function deleteTask(ctx) {
     let err, task;
     task = ctx.params;
-    logger.debug("delete:", task);
-    task = fromid(task);
-    //
+
     [err, task] = await to(this.settings.datastore.delete(task));
     if (err) { logger.error(err); throw err; }
-    //
-    [err] = await to(s3.deleteFile(task.input));
+
+    [err] = await to(s3.deleteFile(task.inputPath));
     if (err) { logger.error(err); }
-    [err] = await to(s3.deleteFile(task.output));
+    [err] = await to(s3.deleteFile(task.outputPath));
     if (err) { logger.error(err); }
-    //
-    logger.debug("deleted:", task);
-    return;
+  
+    return task;
 }
 
 /**
  * Get information (status) of a specific task
+ * @info The status for a non existing task is by default null, no error is
+ * expected. 
  * 
  * @param {object} ctx.params Task with field: id(string)
  * @return {Task} A full Task object as described in the database 
  */
 async function statusTask(ctx) {
-    let err, task, filename;
+    let err, task;
     task = ctx.params;
-    logger.debug("status:", task);
-    //
-    task = fromid(task);
-    //
+
     [err, task] = await to(this.settings.datastore.select(task));
     if (err) { logger.error(err); throw err; }
-    //
-    task = toid(task);
-    //
-    logger.debug("statusd:", task);
+
     return task;
 }
 
@@ -167,19 +162,16 @@ async function statusTask(ctx) {
  * @return {Stream} Stream of the processed document 
  */
 async function resultTask(ctx) {
-    let err, task;
+    let err, task, doc_stream;
     task = ctx.params;
-    logger.info("result:", task);
-    
-    task = fromid(task);
     
     [err, task] = await to(this.settings.datastore.select(task));
     if (err) { logger.error(err); throw err; }
     
-    [err, stream] = await to(s3.readFile(task.input));
+    [err, doc_stream] = await to(s3.readFile(task.inputPath));
     if (err) { logger.error(err); throw err; }
 
-    return stream;
+    return doc_stream;
 }
 
 /**
@@ -190,11 +182,9 @@ async function resultTask(ctx) {
 async function pullTask() {
     let err, task;
     [err, task] = await to(this.settings.datastore.take());
-    if (err) { logger.error(err);  err; }
+    if (err) { logger.error(err); }
     if (!task) return null;
     
-    task = toid(task);
-
     return task;
 }
 
@@ -207,11 +197,7 @@ async function pullTask() {
 async function updateTask(ctx) {
     let err, task, wakeup;
     task = ctx.params;
-    logger.info("update:", task);
-    //
-    task = fromid(task);
-    //
-    logger.info(task.mode);
+
     if (task.mode === "failure") {
         [err, wakeup] = await to(this.settings.datastore.save_on_failure(task));
     } else if (task.mode === "simple") {
@@ -228,11 +214,15 @@ async function updateTask(ctx) {
 
     if (err) { logger.error(err); throw err; }
 
+    // Add task to billing storage
+    if (task.mode === "failure" || task.mode === "simple" || task.mode === "merge") {
+        await(this.settings.datastore.billing(task.id));
+    }
+
     if (wakeup) {
         this.broker.broadcast("worker.wakeup");
     }
-    //
-    logger.info("updated: " + task.name +  task._id);
+
     return;
 }
 
@@ -240,29 +230,24 @@ async function updateTask(ctx) {
     PRIVATE
 ----------------------------------------------------------------------------- */
 
-// Helpers
-let toid = t => { t.id = `${config.site}:${t._id}`; return t; }
-let fromid = t => { t._id = t.id.split(':')[1]; return t; }
-
 async function reload() {
     logger.debug("reload from database");
     await this.settings.datastore.reload();
 }
 
 async function run() {
-    logger.debug("run called");
-
     // return if already RUNNING - placed here are run is called async'd
     if (RUNNING) return;
 
     // starting loop
-    logger.debug("run loop started");
+    logger.debug("Run loop started");
     RUNNING = true;
     while (!EXITING) {
         let err, stats;
         //
         if (!err) {
             [err, stats] = await to(this.settings.datastore.stats());
+            logger.debug(stats);
             if (err) { logger.error(err); }
         }
         //
@@ -276,7 +261,7 @@ async function run() {
     }
 
     // EXITING
-    exit(5000);
+    exit(10000);
     await this.broker.stop();
     process.exit();
 }

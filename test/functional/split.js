@@ -1,10 +1,10 @@
-global.APP_ROOT_DIR = global.APP_ROOT_DIR || __dirname;
+global.APP_ROOT_DIR = global.APP_ROOT_DIR || __dirname+"/..";
 
 const { ServiceBroker } = require("moleculer");
-const { loadConfig, nodeid, sleep, logger, streamToString, to } = require("../common/utils");
+const { loadConfig, nodeid, sleep, logger, streamToString, to } = require("../../common/utils");
 const program = require("commander");
 const stream = require("stream");
-const s3 = require("../common/s3");
+const s3 = require("../../common/s3");
 const pQueue = require("p-queue");
 
 let itemsToGenerate = 1;
@@ -71,7 +71,7 @@ async function wait() {
                     logger.error("null found");
                     res.created.null++;
                 } else {
-                    let [err, s] = await to(s3.readFile(p.v.input));
+                    let [err, s] = await to(s3.readFile(p.v.inputPath));
                     if (err) {
                         logger.error("s3 error:", err);
                         res.created.error++;
@@ -97,7 +97,7 @@ async function wait() {
                     logger.error("task error:", p.v.error)
                     res.results.error++;
                     res.results.count++;
-                } else if (p.v.status != "output") {
+                } else if (p.v.status != "OUTPUT") {
                     const task = p.v;
                     arr.push(reflect('status', broker.call("controller.statusTask", task)));
                 } else if (p.v.status == "wait") {
@@ -105,7 +105,7 @@ async function wait() {
                     logger.warn(p)
                 } else {
                     res.results.count++;
-                    let [err, s] = await to(s3.readFile(p.v.output));
+                    let [err, s] = await to(s3.readFile(p.v.outputPath));
                     if (err) {
                         logger.error("s3 error:", err);
                         res.results.error++;

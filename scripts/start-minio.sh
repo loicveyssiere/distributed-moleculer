@@ -6,7 +6,7 @@ cd $PATH_PROJECT
 # dev conf
 MINIO_ACCESS_KEY=test
 MINIO_SECRET_KEY=test1234
-MINIO_SERVERS=( /tmp/ocr-ms/moleculer )
+MINIO_SERVERS=( ./tmp/minio )
 
 # override for production
 [ -f ./start.conf ] && source ./start.conf

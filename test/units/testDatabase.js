@@ -2,15 +2,20 @@
 
 const assert = require('assert');
 var sinon = require('sinon');
-const { uuid, logger, to } = require("../common/utils");
+const { uuid, logger, to } = require("../../common/utils");
 //const bdd = require("../common/db_nedb");
 
-const db_nedb = require("../common/db_nedb");
+const db_nedb = require("../../common/db_nedb");
 const database_nedb = new db_nedb();
 
-const db_hbase = require("../common/db_hbase");
-const database_hbase = new db_hbase();
-
+const db_hbase = require("../../common/db_hbase");
+const database_hbase = new db_hbase({
+    family: 'C',
+    primary: 'id',
+    schema: 'onv_ocr',
+    table: 'task'
+});
+/*
 describe('neDB', function() {
 
     it ('should return null object if id is null on get call', async function() {
@@ -45,7 +50,7 @@ describe('neDB', function() {
         await scan(database_nedb);
     });
 });
-
+*/
 describe('HBase', function() {
 
     it ('should return null object if id is null on get call', async function() {
@@ -84,23 +89,27 @@ describe('HBase', function() {
 /* -----------------------------------------------------------------------------
     METHODS
 ----------------------------------------------------------------------------- */
-var inputTask = {
-    user: "loic",
-    name: "veyssiere",
-    status: "input",
-    priority: 0,
-    input: "input",
-    output: "output",
-    submitTime: 1234,
-    startTime: 1234,
-    nextTime: 1234,
-    duration: 0,
-    process: 0,
-    tries: 0,
-    hostname: "host",
-    error: null,
-    childrenCompleted: 12345,
-    children: [{a: "a"}, {a: "b"}]
+function getInputTask(priority) {
+    let stringPriority = ("0000" + priority).slice(-4);
+    return {
+        id: `${stringPriority}.${uuid()}`, // "0000.abcd",
+        status: "input",
+        priority: priority,
+        profile: "Default",
+        userType: "WEB",
+        userId: "veyssiere",
+        inputPath: "input",
+        outputPath: "output",
+        submitTime: 1234,
+        startTime: 1234,
+        userDuration: 0,
+        processDuration: 0,
+        tries: 8,
+        hostName: "host",
+        errorMessage: null,
+        childrenCompleted: 2,
+        childrenArray: [{a: "a"}, {a: "b"}]
+    } 
 }
 
 async function return_null_on_get(database) {
@@ -115,13 +124,14 @@ async function return_null_on_get(database) {
 async function insert_get_delete(database) {
     // Arrange
     let err1, err2, err3, err4;
+    let inputTask = getInputTask(0);
     let insertTask, getTask, removeTask, noTask;
     
     // Act
     [err1, insertTask] = await to(database.insert(inputTask));
-    [err2, getTask] = await to(database.get(insertTask._id));
-    [err3, removeTask] = await to(database.remove(insertTask._id));
-    [err4, noTask] = await to(database.get(insertTask._id));
+    [err2, getTask] = await to(database.get(inputTask.id));
+    [err3, removeTask] = await to(database.remove(insertTask.id));
+    [err4, noTask] = await to(database.get(insertTask.id));
     
     // Assert
     assert.equal(err1, null);
@@ -130,7 +140,6 @@ async function insert_get_delete(database) {
     assert(err4 == null || err4 == "Item not existing");
     
     assert(insertTask != null);
-    console.log(insertTask);
     assert.deepEqual(insertTask, getTask);
     //assert.equal(removeTask, 1);
     assert.equal(noTask, null);
@@ -139,21 +148,22 @@ async function insert_get_delete(database) {
 async function update(database) {
     // Arrange
     let err1, err2, err3, err4;
+    let inputTask = getInputTask(0);
     let insertTask, updateTask, getTask, removeTask;
 
     // Act
     [err1, insertTask] = await to(database.insert(inputTask));
-    [err2, updateTask] = await to(database.update(insertTask._id, {
+    [err2, updateTask] = await to(database.update(insertTask.id, {
         check: null, 
         set: {
             status: "output",
-            output: "new_output"
+            outputPath: "new_output"
         },
         increment: null,
         returnTask: true
     }));
-    [err3, getTask] = await to(database.get(insertTask._id));
-    [err4, removeTask] = await to(database.remove(insertTask._id));
+    [err3, getTask] = await to(database.get(insertTask.id));
+    [err4, removeTask] = await to(database.remove(insertTask.id));
 
     // Assert
     assert.equal(err1, null);
@@ -168,38 +178,39 @@ async function update(database) {
 
     assert.deepEqual(updateTask, getTask);
     assert.equal(getTask.status, "output");
-    assert.equal(getTask.output, "new_output");
+    assert.equal(getTask.outputPath, "new_output");
 }
 
 async function check_and_update(database) {
     // Arrange
     let err1, err2, err3, err4, err5, err6;
+    let inputTask = getInputTask(0);
     let insertTask, updateTask1, updateTask2, getTask1, getTask2, removeTask;
 
     // Act
     [err1, insertTask] = await to(database.insert(inputTask));
-    [err2, updateTask1] = await to(database.update(insertTask._id, {
+    [err2, updateTask1] = await to(database.update(insertTask.id, {
         check: {status:"work"}, 
         set: {
             status: "output1",
-            output: "new_output1"
+            outputPath: "new_output1"
         },
         increment: null,
         returnTask: true
     }));
-    [err3, getTask1] = await to(database.get(insertTask._id));
+    [err3, getTask1] = await to(database.get(insertTask.id));
 
-    [err4, updateTask2] = await to(database.update(insertTask._id, {
+    [err4, updateTask2] = await to(database.update(insertTask.id, {
         check: {status:"input"}, 
         set: {
             status: "output2",
-            output: "new_output2"
+            outputPath: "new_output2"
         },
         increment: null,
         returnTask: true
     }));
-    [err5, getTask2] = await to(database.get(insertTask._id));
-    [err6, removeTask] = await to(database.remove(insertTask._id));
+    [err5, getTask2] = await to(database.get(insertTask.id));
+    [err6, removeTask] = await to(database.remove(insertTask.id));
 
     // Assert
     assert.equal(err1, null);
@@ -211,48 +222,49 @@ async function check_and_update(database) {
     
     assert.deepEqual(updateTask2, getTask2);
     assert.equal(getTask1.status, "input");
-    assert.equal(getTask1.output, "output");
+    assert.equal(getTask1.outputPath, "output");
     assert.equal(getTask2.status, "output2");
-    assert.equal(getTask2.output, "new_output2");
+    assert.equal(getTask2.outputPath, "new_output2");
 }
 
 async function check_update_increment(database) {
         // Arrange
         let err1, err2, err3, err4, err5, err6;
+        let inputTask = getInputTask(0);
         let insertTask, updateTask1, updateTask2, getTask1, getTask2, removeTask;
     
         // Act
         [err1, insertTask] = await to(database.insert(inputTask));
-        [err2, updateTask1] = await to(database.update(insertTask._id, {
+        [err2, updateTask1] = await to(database.update(insertTask.id, {
             check: {status:"work"}, 
             set: {
                 status: "output1",
-                output: "new_output1"
+                outputPath: "new_output1"
             },
             increment: {
-                process: 2000,
+                processDuration: 2000,
                 childrenCompleted: 2,
-                duration: 2000
+                userDuration: 2000
             },
             returnTask: true
         }));
-        [err3, getTask1] = await to(database.get(insertTask._id));
+        [err3, getTask1] = await to(database.get(insertTask.id));
     
-        [err4, updateTask2] = await to(database.update(insertTask._id, {
+        [err4, updateTask2] = await to(database.update(insertTask.id, {
             check: {status:"input"}, 
             set: {
                 status: "output2",
-                output: "new_output2"
+                outputPath: "new_output2"
             },
             increment: {
-                process: 3000,
+                processDuration: 3000,
                 childrenCompleted: 3,
-                duration: 3000
+                userDuration: 3000
             },
             returnTask: true
         }));
-        [err5, getTask2] = await to(database.get(insertTask._id));
-        [err6, removeTask] = await to(database.remove(insertTask._id));
+        [err5, getTask2] = await to(database.get(insertTask.id));
+        [err6, removeTask] = await to(database.remove(insertTask.id));
     
         // Assert
         assert.equal(err1, null);
@@ -263,38 +275,39 @@ async function check_update_increment(database) {
         assert.equal(err6, null);
     
         assert.equal(getTask1.status, "input");
-        assert.equal(getTask1.output, "output");
-        assert.equal(getTask1.process, inputTask.process);
+        assert.equal(getTask1.outputPath, "output");
+        assert.equal(getTask1.processDuration, inputTask.processDuration);
         assert.equal(getTask1.childrenCompleted, inputTask.childrenCompleted);
-        assert.equal(getTask1.duration, inputTask.duration);
+        assert.equal(getTask1.userDuration, inputTask.userDuration);
         
         assert.deepEqual(updateTask2, getTask2);
         assert.equal(getTask2.status, "output2");
-        assert.equal(getTask2.output, "new_output2");
-        assert.equal(getTask2.process, inputTask.process + 3000);
+        assert.equal(getTask2.outputPath, "new_output2");
+        assert.equal(getTask2.processDuration, inputTask.processDuration + 3000);
         assert.equal(getTask2.childrenCompleted, inputTask.childrenCompleted + 3);
-        assert.equal(getTask2.duration, inputTask.duration + 3000);
+        assert.equal(getTask2.userDuration, inputTask.userDuration + 3000);
 }
 
 async function increment(database) {
     // Arrange
     let err1, err2, err3, err4;
+    let inputTask = getInputTask(0);
     let insertTask, updateTask, getTask, removeTask;
 
     // Act
     [err1, insertTask] = await to(database.insert(inputTask));
-    [err2, updateTask] = await to(database.update(insertTask._id, {
+    [err2, updateTask] = await to(database.update(insertTask.id, {
         check: null, 
         set: null,
         increment: {
-            process: 123456789,
+            processDuration: 123456789,
             childrenCompleted: 1,
-            duration: 100
+            userDuration: 100
         },
         returnTask: true
     }));
-    [err3, getTask] = await to(database.get(insertTask._id));
-    [err4, removeTask] = await to(database.remove(insertTask._id));
+    [err3, getTask] = await to(database.get(insertTask.id));
+    [err4, removeTask] = await to(database.remove(insertTask.id));
 
     // Assert
     assert.equal(err1, null);
@@ -309,27 +322,28 @@ async function increment(database) {
 
     assert.deepEqual(updateTask, getTask);
     assert.equal(getTask.status, "input");
-    assert.equal(getTask.output, "output");
-    assert.equal(getTask.process, inputTask.process + 123456789);
+    assert.equal(getTask.outputPath, "output");
+    assert.equal(getTask.processDuration, inputTask.processDuration + 123456789);
     assert.equal(getTask.childrenCompleted, inputTask.childrenCompleted + 1);
-    assert.equal(getTask.duration, inputTask.duration + 100);
+    assert.equal(getTask.userDuration, inputTask.userDuration + 100);
 }
 
 async function atomic_increment(database) {
  
     // Arrange
     let err1, err2, err3;
+    let inputTask = getInputTask(0);
     let insertTask, getTask, removeTask;
     let n = 100;
     let jobs = [];
     async function job() {
-        await to(database.update(insertTask._id, {
+        await to(database.update(insertTask.id, {
             check: null, 
             set: null,
             increment: {
-                process: 1,
+                processDuration: 1,
                 childrenCompleted: 2,
-                duration: 3
+                userDuration: 3
             },
             returnTask: false
         }));
@@ -341,41 +355,41 @@ async function atomic_increment(database) {
         jobs.push(job());
     }
     await Promise.all(jobs);
-    [err2, getTask] = await to(database.get(insertTask._id));
-    [err3, removeTask] = await to(database.remove(insertTask._id));
+    [err2, getTask] = await to(database.get(insertTask.id));
+    [err3, removeTask] = await to(database.remove(insertTask.id));
 
     // Assert
     assert.equal(err1, null);
     assert.equal(err2, null);
     assert.equal(err3, null);
 
-    assert.equal(getTask.process, inputTask.process + n * 1);
+    assert.equal(getTask.processDuration, inputTask.processDuration + n * 1);
     assert.equal(getTask.childrenCompleted, inputTask.childrenCompleted + n * 2);
-    assert.equal(getTask.duration, inputTask.duration + n * 3);    
+    assert.equal(getTask.userDuration, inputTask.userDuration + n * 3);    
 }
 
 async function scan(database) {
 
     // Arrange
+    let inputTask = getInputTask(0);
     let err1, err2, err3, err4, insertTask, getTask, removeTask;
-    let cat = 2;
-    let n = cat * 1;
+    let cat = 10;
+    let n = cat * 10;
     let ids = [];
     let tasks = [];
     let scanner = database.scanner;
     for (let i = 0; i < n; i++) {
-        let new_task = {...inputTask};
-        new_task.priority = parseInt(i / 1);
+        let new_task = {...getInputTask(parseInt(i / cat))};
         [err1, insertTask] = await to(database.insert(new_task));
-        ids.push(insertTask._id);
+        ids.push(insertTask.id);
     }
 
     async function job(err, row) {
         try {
             //console.log(row);
-            [err3, getTask] = await to(database.get(row._id));
+            [err3, getTask] = await to(database.get(row.id));
             tasks.push(getTask);
-            [err4, removeTask] = await to(database.remove(row._id));
+            [err4, removeTask] = await to(database.remove(row.id));
             assert.equal(err3, null);
             assert.equal(err4, null);
             return null;
@@ -386,28 +400,32 @@ async function scan(database) {
     }
 
     // Act
-    scanner.init({table: 'taskP0000'});
-    [err2] = await to(scanner.each(job));
-    scanner.clear();
-    scanner.init({table: 'taskP0001'});
-    [err2] = await to(scanner.each(job));
-    scanner.clear();
-    
+    for (let i = cat; i >= 0; i--) {
+        let startRow = ("0000" + i.toString()).slice(-4);
+        let stopRow = ("0000" + (i+1).toString()).slice(-4);
+        scanner.init(startRow, stopRow);
+        [err1] = await to(scanner.each(job));
+        if (err1) break;
+        scanner.clear();
+    }
 
     // Assert
     assert.equal(err1, null);
-    assert.equal(err2, null);
 
     assert.equal(ids.length, n);
     assert.equal(tasks.length, n);
 
+    console.log(ids);
+    console.log(tasks);
+
+    let previousPriority = 9999;
     for (let task of tasks) {
-        if (ids.indexOf(task._id) == -1) {
-            //console.log(ids);
-            //console.log(task);
+        if (ids.indexOf(task.id) == -1) {
             assert.fail("missing id")
         }
-    }
-    
 
+        let priority = task.priority;
+        assert(priority <= previousPriority);
+        previousPriority = priority;
+    }
 }
