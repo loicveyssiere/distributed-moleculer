@@ -5,28 +5,38 @@ const { to, logger, uuid } = require("./utils");
 const { PriorityCache } = require("./structures");
 const s3 = require("./s3");
 const db = require("./db_hbase");
+const EventEmitter = require('events');
 
 var stats = { input: 0, work: 0, output: 0, error: 0, total: 0 };
 
 var shift = (offset, date) => new Date((date ? date : new Date()).getTime() + offset);
 
-class DataStore {
-    constructor() {
-        console.log("init datastore");
+class DataStore extends EventEmitter {
+    constructor(config) {
+        super();
+        var self = this;
         this.dbTask = new db({
             family: 'C',
             primary: 'id',
             schema: 'onv_ocr_2',
-            table: 'task'
+            table: 'task',
+            hbase: config.hbaseOptions
         });
         this.dbBilling = new db({
             family: 'C',
             primary: 'id',
             schema: 'onv_ocr_2',
-            table: 'billing'
+            table: 'billing',
+            hbase: config.hbaseOptions
         });
         this.priorities = {};
         this.cache = new PriorityCache();
+        this.dbTask.on("error", err => {
+            self.emit('error', err);
+        });
+        this.dbBilling.on("error", err => {
+            self.emit('error', err);
+        });
     }
 
     /**
@@ -60,6 +70,8 @@ class DataStore {
             processDuration: 0,
             site: item.site,
             hostName: item.hostName,
+            //siteProcessor: null,
+            //hostNameProcessor: null,
             tries: 0,
             errorMessage: null,
             parentId: parentId
@@ -192,7 +204,9 @@ class DataStore {
                 status: task.status,
                 tries: task.tries,
                 errorMessage: task.errorMessage,
-                hostName: task.hostName
+                //hostName: task.hostName
+                siteProcessor: task.siteProcessor,
+                hostNameProcessor: task.hostNameProcessor
             },
             increment: null,
             returnTask: false
@@ -227,7 +241,10 @@ class DataStore {
                 processDuration: now - inputTask.startTime,
                 cpuDuration: now - inputTask.startTime,
                 errorMessage: null,
-                hostName: inputTask.hostName
+                //hostName: inputTask.hostName,
+                //site: inputTask.site
+                siteProcessor: inputTask.siteProcessor,
+                hostNameProcessor: inputTask.hostNameProcessor
             },
             increment: null,
             returnTask: false
@@ -258,7 +275,9 @@ class DataStore {
                 processDuration: now - inputTask.startTime,
                 cpuDuration: now - inputTask.startTime,
                 errorMessage: null,
-                hostName: inputTask.hostName
+                //hostName: inputTask.hostName
+                siteProcessor: inputTask.siteProcessor,
+                hostNameProcessor: inputTask.hostNameProcessor
             },
             increment: null,
             returnTask: true
@@ -312,8 +331,10 @@ class DataStore {
                 status: "WAIT",
                 processDuration: now - inputTask.startTime,
                 cpuDuration: now - inputTask.startTime,
-                hostName: inputTask.hostName,
-                errorMessage: null
+                //hostName: inputTask.hostName,
+                errorMessage: null,
+                siteProcessor: inputTask.siteProcessor,
+                hostNameProcessor: inputTask.hostNameProcessor
             },
             increment: null,
             returnTask: false
@@ -374,7 +395,9 @@ class DataStore {
                 userDuration: now - inputTask.submitTime,
                 processDuration: now - inputTask.startTime,
                 errorMessage: null,
-                hostName: inputTask.hostName
+                //hostName: inputTask.hostName
+                siteProcessor: inputTask.siteProcessor,
+                hostNameProcessor: inputTask.hostNameProcessor
             },
             increment: {
                 cpuDuration: now - inputTask.lastStartTime
@@ -429,11 +452,11 @@ class DataStore {
             let scanner = this.dbTask.scanner(startRow, stopRow);
 
             [err] = await to(scanner.each(async function(err, task, done) {
-                console.log(task.id);
                 try {
                     let updater = null;
                     let statusPush = ["INPUT", "COMPLETE", "WAIT"]
                     if (statusPush.indexOf(task.status) > -1) {
+                        logger.info(`Restoring "${task.id}"`);
                         self.cache.push(task.id, task.priority);
                     } else if (task.status == "WORK") {
                         if (!task.childrenTotal) {
@@ -451,6 +474,7 @@ class DataStore {
                             if (!err) {
                                 throw err;
                             } else {
+                                logger.info(`Restoring & correcting "${task.id}"`);
                                 self.cache.push(task.id, task.priority);
                             }
                         }

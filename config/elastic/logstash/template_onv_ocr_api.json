@@ -1,0 +1,182 @@
+{
+  "template": "onv_ocr_api",
+  "version": 1,
+  "settings": {
+    "index.refresh_interval": "1h"
+  },
+  "mappings": {
+    "_default_": {
+      "properties" : {
+        "@timestamp" : {
+          "type" : "date"
+        },
+        "timestamp" : {
+          "type" : "date"
+        },
+        "@version" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "beat" : {
+          "properties" : {
+            "hostname" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "name" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "version" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            }
+          }
+        },
+        "host" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "level" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "logstashTimestamp" : {
+          "type" : "date"
+        },
+        "message" : {
+          "properties" : {
+            "hostname" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "ip" : {
+              "type" : "text"
+            },
+            "method" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "originalUrl" : {
+              "type" : "text"
+            },
+            "params" : {
+              "properties" : {
+                "taskId" : {
+                  "type" : "text"
+                }
+              }
+            },
+            "path" : {
+              "type" : "text"
+            },
+            "pathName" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "protocol" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            },
+            "responseTime" : {
+              "type" : "long"
+            },
+            "contentLength" : {
+              "type" : "long"
+            },
+            "statusCode" : {
+              "type" : "long"
+            },
+            "uuid" : {
+              "type" : "text"
+            }
+          }
+        },
+        "offset" : {
+          "type" : "long"
+        },
+        "prospector" : {
+          "properties" : {
+            "type" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            }
+          }
+        },
+        "source" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "tags" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        }
+      }
+    }
+  }
+}

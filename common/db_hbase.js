@@ -19,6 +19,7 @@ All methods return promises
 
 const hbase = require("hbase-rpc-client");
 var Int64BE = require("int64-buffer").Int64BE;
+const EventEmitter = require('events');
 
 const { uuid, logger, to } = require("../common/utils");
 const schema = require("../common/schema");
@@ -63,17 +64,13 @@ class Scanner {
     }
 }
 
-class db {
+class db extends EventEmitter {
 
     constructor(options) {
         logger.info("initialise database");
-        this.client = hbase({
-            zookeeperHosts: ["localhost:2181"],
-            zookeeperRoot: "/hbase",
-            rpcTimeout: 2000,
-            callTimeout: 2000,
-            tcpNoDelay: false
-        });
+        super();
+        var self = this;
+        this.client = hbase(options.hbase);
         this.primary = options.primary;
         this.family = options.family.toUpperCase();
         this.fields = schema[options.table.toUpperCase()];
@@ -83,8 +80,10 @@ class db {
             this.table = options.table.toUpperCase();
         }
         logger.info("database initialised");
-        this.client.on("error", err => logger.error("connection error", err));
-        //this.scanner = new Scanner({db: this});
+        this.client.on("error", err => {
+            logger.error("connection error", err);
+            self.emit('error', err);
+        });
     }
 
     scanner(startRow, stopRow) {

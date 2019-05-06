@@ -2,7 +2,7 @@ node_modules/
 data/
 *~
 .vscode
-doc
+doc/SampleOcrRequests.sh
 logs
 tmp
 start.conf

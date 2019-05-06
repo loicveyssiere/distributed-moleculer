@@ -71,7 +71,7 @@ function start(app) {
         res.body = err.message;
         res.err = err;
         res.type('application/json');
-        logger.info(`API sent a ${err.status} error with the message: ${err.message}`);
+        logger.info(`API on ${req.method} ${req.path} sent an ${err.status} error with the message: ${err.message}`);
         res.status(err.status);
         if (err.status === 401) {
             res.set("WWW-Authenticate", "Basic realm=\"Authorization Required\"");
@@ -157,15 +157,18 @@ function start(app) {
         logger.info('| port: ' + /*port*/8081);
         
         app.broker.start();
-        CacheSingleton.setOptions(config.cacheOptions);
-        app.cache = CacheSingleton.getInstance();
+        CacheSingleton.setConfig(config);
+        CacheSingleton.getInstance();
+        CacheSingleton.on("error", function(err) {
+            process.exit(1);
+        });
 
         // Clean termination of the micro-service 
         death((_, err) => { 
             // SIGINT: Sent from CTRL-C.
             // SIGQUIT: Sent from keyboard quit action.
             // SIGTERM: Sent from operating system kill.
-            exit(1000);
+            exit(10000);
             if (err) { logger.error(err); }
             if (app.broker != null) logger.info("Exiting, waiting for current process to finish");
         });

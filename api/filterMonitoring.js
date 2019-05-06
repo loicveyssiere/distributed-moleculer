@@ -1,6 +1,6 @@
 "use strict";
 
-const { uuid, logger } = require(global.APP_ROOT_DIR + "/../common/utils");
+const { uuid, logger, shortname } = require(global.APP_ROOT_DIR + "/../common/utils");
 
 function filterMonitoring(req, res, next) {
     logger.debug("/filterMonitoring");
@@ -28,8 +28,9 @@ function message(req, res) {
         path: req.path,
         pathName: req.swagger.pathName,
         protocol: req.protocol,
-        hostname: req.hostname,
+        hostname: shortname(), // req.hostname,
         statusCode: res.statusCode,
+        contentLength: req.res._contentLength || 0,
         responseTime: req.metadata.endTime - req.metadata.startTime
         /*
         req: {

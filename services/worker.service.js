@@ -164,6 +164,9 @@ async function work(task) {
         try {
             // Don't forget to add permission to the script (chmod a+x)
             let promise = shellExec(this.broker.options.exec);
+            console.log("mmmmmmmmm");
+            console.log(JSON.stringify(json));
+            console.log("pppppppppp");
             promise.child.stdin.write(JSON.stringify(json))
             promise.child.stdin.end();
 
@@ -172,6 +175,9 @@ async function work(task) {
             logger.info("stderr: " + outputs.stderr)
             
             var resultTask = outputs && outputs.stdout && JSON.parse(outputs.stdout);
+            console.log("rrrrrrrrrrrrr");
+            console.log(JSON.stringify(resultTask));
+            console.log("yyyyyyyyyyyyy");
         } catch (e) {
             err = e;
         }
@@ -222,6 +228,10 @@ async function work(task) {
                 });
             }
         }
+
+        // Add ownership of the processing
+        task.siteProcessor = this.broker.options.site;
+        task.hostNameProcessor = shortname();
     }
 
     // 5 - Finalization of the task: failure | success -------------------------

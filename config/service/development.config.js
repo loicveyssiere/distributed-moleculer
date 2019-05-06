@@ -1,7 +1,7 @@
 // here the configuration of a cluster (site)
 const common = {
     nodeID: "common",
-    site: "dev",
+    site: "DEV",
     logger: true,
     logLevel: "error",
     transporter: "nats://localhost:4222",
@@ -9,6 +9,13 @@ const common = {
     retryPolicy: {
         enabled: true,
     },
+    hbaseOptions: {
+        zookeeperHosts: ["localhost:2181"],
+        zookeeperRoot: "/hbase",
+        rpcTimeout: 2000,
+        callTimeout: 2000,
+        tcpNoDelay: false
+    }
 };
 
 const api = {
@@ -67,10 +74,10 @@ const global = {
     nodeID: "global",
     logger: true,
     transporter: "nats://localhost:5222",
-    skipProcessEventRegistration: true,
+    skipProcessEventRegistration: false,
     retryPolicy: {
         enabled: true,
-    },
+    }
 };
 
 const s3 = {

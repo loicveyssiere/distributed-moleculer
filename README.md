@@ -7,20 +7,18 @@ document processing. The heterogeneity of the task to be processed imposes a
 
 ## TODO
 
-- [ ] Bug, the cache structure set isEmpty to true whereas the cache is not empty
+
 - [ ] Bug critical, when the job script fails, the worker seems to exit its main loop
-- [ ] Bug, when hbase emits an error, we should restart the service
-- [ ] API: Authorization with quotas
-- [ ] api-key with quotas, offloading access and priority
 - [ ] add authentication information in log usage monitoring
-- [ ] Job-stealing with children: careful treatment to do (increment parent)
 - [ ] Minio load testing (read and write volume charge for documents)
 - [ ] Minio configuration
-- [ ] job stealing stats + correctness + working in standalone
 - [ ] HTTPS on api server
 
 ## Backlogs
 
+- [ ] Job stealing - add share document for children
+- [ ] API: Authorization with quotas
+- [ ] api-key with quotas, offloading access and priority
 - [ ] Inspect for variable to put in the configuration (zookeeper conf for example)
 - [ ] Inspect structure, FIFO seems weird with priority (tests)
 - [ ] Enable a working library without the stealer
@@ -40,6 +38,13 @@ document processing. The heterogeneity of the task to be processed imposes a
 
 ## Done
 
+- [x] Bug, when hbase emits an error, we should restart the service
+- [x] hash api keys
+- [x] Enable custom profile
+- [x] Job-stealing with children: careful treatment to do (increment parent)
+- [x] Data structure are broken isEmpty and highestPriority. shareLogs is impacted...
+- [x] job stealing stats + correctness + working in standalone
+- [x] Bug, the cache structure set isEmpty to true whereas the cache is not empty
 - [x] Bug correction in reloading (use done function)
 - [x] Scanner get instances and remove singleton
 - [x] Cache create a real singleton class

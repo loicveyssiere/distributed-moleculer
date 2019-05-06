@@ -90,7 +90,6 @@ async function deleteTask(ctx) {
     return task;
 }
 
-
 /**
  * Entrypoint to get information (status) of a specific task
  * 
@@ -132,12 +131,14 @@ async function pullTask() {
     if (!err && task != null) {
         return task;
     }
+    
     [err, task] = await to(this.broker.call("stealer.pullTask"));
-    if (err) { logger.debug(err); }
+    if (err) { logger.error(err); }
     if (!err && task != null) {
         logger.info(`stealer pulling the task ${task.id}`);
         return task;
     }
+    
     return null;
 }
 

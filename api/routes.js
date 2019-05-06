@@ -1,7 +1,7 @@
 "use strict";
 
 const stream = require("stream");
-const { loadConfig, death, exit, uuid, pipeline, to, logger, shortname, sleep }
+const { to, logger }
     = require(global.APP_ROOT_DIR + "/../common/utils");
 
 async function postTask(req, res, next) {

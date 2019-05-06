@@ -45,13 +45,15 @@ const service = {
     async started() {
         // Fired when `broker.start()` called.
         try {
-            this.settings.datastore = new DataStore();
+            this.settings.datastore = new DataStore(config);
+            this.settings.datastore.on("error", err => {
+                process.exit(1);
+            });
             this.reload();
-            this.run();
         } catch (e) {
             logger.error(e);
         }
-        setInterval(this.run, 1000);
+        setInterval(this.run, 10000);
     }
 }
 
@@ -234,19 +236,18 @@ async function reload() {
 }
 
 async function run() {
-    logger.debug("run called");
-
     // return if already RUNNING - placed here are run is called async'd
     if (RUNNING) return;
 
     // starting loop
-    logger.debug("run loop started");
+    logger.debug("Run loop started");
     RUNNING = true;
     while (!EXITING) {
         let err, stats;
         //
         if (!err) {
             [err, stats] = await to(this.settings.datastore.stats());
+            logger.debug(stats);
             if (err) { logger.error(err); }
         }
         //
@@ -260,7 +261,7 @@ async function run() {
     }
 
     // EXITING
-    exit(5000);
+    exit(10000);
     await this.broker.stop();
     process.exit();
 }

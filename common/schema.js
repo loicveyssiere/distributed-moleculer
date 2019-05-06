@@ -31,6 +31,8 @@ module.exports = {
         /* Node */
         site: 2,
         hostName: 2,
+        siteProcessor: 2,
+        hostNameProcessor: 2,
         /* Error */
         tries: 3,
         errorMessage: 1,

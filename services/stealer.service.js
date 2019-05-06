@@ -40,7 +40,7 @@ const globalService = {
         updateTask: global_updateTask
     },
     events: {
-        "backlog.state": event_backlog
+        "stealer.backlog": backlog
     }
 }
 
@@ -75,8 +75,7 @@ if (!module.parent) {
     ACTIONS
 ----------------------------------------------------------------------------- */
 async function pullTask() {
-    let err;
-    logger.debug("pullTask called");
+    let err, doc_stream;
     let maxState = null;
     for (let state of Object.values(states)) {
         if (state.hasTasks >= 0) {
@@ -92,11 +91,12 @@ async function pullTask() {
         [err, task] = await to(this.settings.globalBroker.call(action));
         if (err) { logger.error(err); return null; }
         if (task == null) { return null; }
-        [err, input] = await to(this.settings.globalBroker.call(actionInput, task));
+        logger.warn(JSON.stringify(task));
+        [err, doc_stream] = await to(this.settings.globalBroker.call(actionInput, task));
         if (err) { logger.error(err); return null; }
-        [err] = await to(s3.writeFile(input, task.inputPath))
+        [err] = await to(s3.writeFile(doc_stream, task.inputPath))
         if (err) { logger.error(err); return null; }
-        logger.debug("remoteTask:", task);
+        logger.info("remoteTask:", task);
         return task;
     }
     return null;
@@ -105,7 +105,7 @@ async function pullTask() {
 async function updateTask(ctx) {
     let err;
     const task = ctx.params;
-    const site = task.id.split(":")[0];
+    const site = task.site;//task.id.split(":")[0];
     const action = `global-${site}.updateTask`;
     let output;
     if (task.result === "success") {
@@ -123,13 +123,14 @@ async function updateTask(ctx) {
 
 async function shareLog(ctx) {
     const state = { ...ctx.params, source: globalConfig.site };
-    logger.debug("shareLog:", state);
-    this.settings.globalBroker.broadcast("backlog.state", state);
+    //console.log(state);
+    this.settings.globalBroker.broadcast("stealer.backlog", state);
 }
+
+/* -------------------------------------------------------------------------- */
 
 async function global_pullTask() {
     let err, task;
-    logger.debug("pullTask called");
     [err, task] = await to(this.settings.broker.call("queuer.pullTask"));
     if (err) { logger.error(err); return null; }
     if (task == null) return null;
@@ -137,8 +138,8 @@ async function global_pullTask() {
 }
 
 async function global_pullTaskInput(ctx) {
-    let err;
-    [err, input] = await to(s3.readFile(ctx.params.input));
+    let err, input;
+    [err, input] = await to(s3.readFile(ctx.params.inputPath));
     if (err) { logger.error(err); return null; }
     return input;
 }
@@ -161,12 +162,13 @@ async function global_updateTask(ctx) {
 /* -----------------------------------------------------------------------------
     EVENTS
 ----------------------------------------------------------------------------- */
-async function event_backlog(state) {
+async function backlog(state) {
     if (state.source === globalConfig.site) return;
     const now = new Date();
     state.date = now;
-    logger.debug("state:", state);
     states[state.source] = state;
+
+    // Expiry of the state
     for (let state of Object.values(states)) {
         if (now - state.date > 10000) {
             states[state.source] = undefined;

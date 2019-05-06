@@ -6,11 +6,11 @@ module.exports = {
     {
       name: 'z-worker',
       script: './services/worker.service.js',
-      instances: 2,
+      instances: 1,
       autorestart: true,
       watch: "worker.service.js",
       max_memory_restart: '1G',
-      kill_timeout: 30000,
+      kill_timeout: 10000,
       exec_mode: "cluster",
       env: {
         NODE_ENV: node_env
@@ -29,10 +29,10 @@ module.exports = {
       }
     },
     {
-      name: 'z-localstore',
+      name: 'z-queuer',
       script: './services/queuer.service.js',
       autorestart: true,
-      watch: "queuer.service.js",
+      watch: "./services/queuer.service.js",
       max_memory_restart: '1G',
       kill_timeout: 10000,
       exec_mode: "cluster",
@@ -41,10 +41,10 @@ module.exports = {
       }
     },
     {
-      name: 'z-remotestore',
-      script: './services/remotestore.js',
+      name: 'z-stealer',
+      script: './services/stealer.service.js',
       autorestart: true,
-      watch: "remotestore.js",
+      watch: "./services/stealer.service.js",
       max_memory_restart: '1G',
       kill_timeout: 10000,
       exec_mode: "cluster",

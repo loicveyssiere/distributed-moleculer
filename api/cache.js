@@ -3,41 +3,46 @@ const db = require("../common/db_hbase");
 
 const { logger, to } = require("../common/utils");
 
-const CacheSingleton = (function() {
+const KEY_USERS = "users";
+
+class CacheSingleton {
     
-    const dbUser = new db({
-        family: 'C',
-        primary: 'id',
-        schema: 'onv_ocr_2',
-        table: 'restKey'
-    });
-    const KEY_USERS = "users";
 
-    var instance;
-    var options
-
-    function createInstance() {
+    static createInstance() {
 
         // Creation of the Cache
-        return new NodeCache(options);
+        this.dbUser = new db({
+            family: 'C',
+            primary: 'id',
+            schema: 'onv_ocr_2',
+            table: 'restKey',
+            hbase: this.config.hbaseOptions
+        });
+
+        return new NodeCache(this.config.cacheOptions);
     }
 
-    function setOptions(opt) {
-        if (!options) options = opt;
+    static on(type, callback) {
+        this.dbUser.on(type, callback);
     }
 
-    function getInstance() {
-        if (!instance) {
-            instance = createInstance();
-            
-            setUsers();
+    static setConfig(opt) {
+        if (!this.config) this.config = opt;
+    }
+
+    static getInstance() {
+        var self = this;
+        if (!this.instance) {
+            this.instance = this.createInstance();
+
+            this.setUsers();
 
             // Main Event: on expiry, reset the data;
-            instance.on("expired", function(key, value) {
-                console.log("EXPIRED")
+            this.instance.on("expired", function(key, value) {
+                console.log("expired")
                 switch (key) {
                     case KEY_USERS:
-                        setUsers();
+                        self.setUsers();
                     break;
                     default:
                         logger.error("The key in cache is not supported");
@@ -45,35 +50,41 @@ const CacheSingleton = (function() {
                 }
             });
         }
-        return instance;
+        return this.instance;
     }
 
-    async function setUsers() {
+    static setUsers() {
 
-        var users = {};
-        let scanner = dbUser.scanner();
+        async function wrapper(self) {
+            let err;
+            var users = {};
+            let scanner = self.dbUser.scanner();
 
-        [err] = await to(scanner.each(async function(err, user, done) {
-            if (err) return err;
-            try {
-                users[user.id] = user;
-                return done();
-            } catch (exception) {
-                console.log(exception);
-                return done(exception);
+            [err] = await to(scanner.each(async function(err, user, done) {
+                if (err) return err;
+                try {
+                    users[user.id] = user;
+                    return done();
+                } catch (exception) {
+                    logger.error(exception);
+                    return done(exception);
+                }
+                
+            }));
+
+            if (err) {
+                logger.error("Cache on users (restKey table) failed to be updated.");
+            } else {
+                logger.info("Cache on users (restKey table) has been updated.");
             }
-            
-        }));
-    
-        scanner.clear();
-      
-        instance.set(KEY_USERS, users);
-    }
+        
+            scanner.clear();
+        
+            self.instance.set(KEY_USERS, users);
+        }
 
-    return {
-        getInstance: getInstance,
-        setOptions: setOptions
+        wrapper(this);
     }
-})();
+}
 
 module.exports = CacheSingleton;
